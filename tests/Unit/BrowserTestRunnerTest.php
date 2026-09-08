@@ -1,6 +1,6 @@
 <?php
 
-use Launch\BrowserTestRunner;
+use OrbitWebsite\BrowserTestRunner;
 
 function launchBrowserRunnerScratch(): string
 {
@@ -78,7 +78,7 @@ function launchBrowserRunnerCleanup(string $directory): void
     rmdir($directory);
 }
 
-final class LaunchBrowserRunnerOnPort extends BrowserTestRunner
+final class WebsiteBrowserRunnerOnPort extends BrowserTestRunner
 {
     public function __construct(
         string $projectRoot,
@@ -147,7 +147,7 @@ it('fails closed with an actionable message when the ssr bundle is missing', fun
 it('starts the built ssr server and stops only the owned process', function () {
     $directory = launchBrowserRunnerScratch();
     $port = launchBrowserRunnerFreePort();
-    $runner = new LaunchBrowserRunnerOnPort($directory, $port);
+    $runner = new WebsiteBrowserRunnerOnPort($directory, $port);
 
     launchBrowserRunnerWriteBundle($directory, launchBrowserRunnerHealthyBundle($port));
 
@@ -166,7 +166,7 @@ it('starts the built ssr server and stops only the owned process', function () {
 
 it('cleans up an owned ssr process that exits before becoming healthy', function () {
     $directory = launchBrowserRunnerScratch();
-    $runner = new LaunchBrowserRunnerOnPort($directory, launchBrowserRunnerFreePort());
+    $runner = new WebsiteBrowserRunnerOnPort($directory, launchBrowserRunnerFreePort());
 
     launchBrowserRunnerWriteBundle($directory, "process.exit(1);\n");
 

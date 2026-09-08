@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Launch\PestRunner;
+use OrbitWebsite\PestRunner;
 use Symfony\Component\Process\Process;
 
 require dirname(__DIR__).'/vendor/autoload.php';

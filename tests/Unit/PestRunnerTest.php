@@ -1,6 +1,6 @@
 <?php
 
-use Launch\PestRunner;
+use OrbitWebsite\PestRunner;
 use Symfony\Component\Process\Process;
 
 /**
@@ -35,9 +35,9 @@ function launchPestRunnerScratch(bool $initializeGit, bool $commit): string
         $directory,
         [
             ...launchPestRunnerGitEnv(),
-            'GIT_AUTHOR_NAME' => 'Launch Test',
+            'GIT_AUTHOR_NAME' => 'Orbit Website Test',
             'GIT_AUTHOR_EMAIL' => 'test@example.com',
-            'GIT_COMMITTER_NAME' => 'Launch Test',
+            'GIT_COMMITTER_NAME' => 'Orbit Website Test',
             'GIT_COMMITTER_EMAIL' => 'test@example.com',
         ],
     );

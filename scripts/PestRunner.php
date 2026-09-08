@@ -1,6 +1,6 @@
 <?php
 
-namespace Launch;
+namespace OrbitWebsite;
 
 use Symfony\Component\Process\Process;
 

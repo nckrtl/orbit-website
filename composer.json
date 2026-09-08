@@ -1,11 +1,11 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "nckrtl/launch",
+    "name": "nckrtl/orbit-website",
     "type": "project",
-    "description": "Marketing and documentation website for Launch.",
+    "description": "The marketing website for Orbit.",
     "keywords": [
         "laravel",
-        "launch",
+        "orbit",
         "marketing",
         "documentation",
         "inertia",
@@ -51,7 +51,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Launch\\": "scripts/",
+            "OrbitWebsite\\": "scripts/",
             "Tests\\": "tests/"
         }
     },

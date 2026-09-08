@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Launch\BrowserTestRunner;
+use OrbitWebsite\BrowserTestRunner;
 
 require dirname(__DIR__).'/vendor/autoload.php';
 

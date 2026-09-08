@@ -7,6 +7,7 @@ use NckRtl\Toolbar\Toolbar;
 it('renders the homepage with the Home inertia component', function () {
     $this->get('/')
         ->assertSuccessful()
+        ->assertSee('<title>Orbit</title>', escape: false)
         ->assertInertia(fn (Assert $page) => $page
             ->component('Home')
         );
