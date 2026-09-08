@@ -289,7 +289,7 @@ function DetailReadout({ selected }: { selected: DetailKey }) {
                 {detail.rows.map(([key, value]) => (
                     <div key={key} className="contents">
                         <dt className="text-orbit-muted">{key}</dt>
-                        <dd className="m-0 overflow-wrap-anywhere text-orbit-secondary">{value}</dd>
+                        <dd className="m-0 min-w-0 wrap-anywhere text-orbit-secondary">{value}</dd>
                     </div>
                 ))}
             </dl>
