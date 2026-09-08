@@ -1,5 +1,5 @@
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
-import { useState } from "react";
+import type { ComponentPropsWithoutRef, CSSProperties, HTMLAttributes, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const assetRoot = "/assets/orbit";
 
@@ -51,19 +51,65 @@ export function ButtonLink({
 
 export function Snippet({ command, className = "" }: { command: string; className?: string }) {
     const [copied, setCopied] = useState(false);
+    const mounted = useRef(false);
+    const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        mounted.current = true;
+
+        return () => {
+            mounted.current = false;
+            if (resetTimer.current) {
+                clearTimeout(resetTimer.current);
+            }
+        };
+    }, []);
 
     const copy = async () => {
-        if (!navigator.clipboard) {
+        let succeeded = false;
+
+        try {
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(command);
+                succeeded = true;
+            }
+        } catch {
+            succeeded = false;
+        }
+
+        if (!mounted.current) {
             return;
         }
 
-        try {
-            await navigator.clipboard.writeText(command);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1400);
-        } catch {
-            setCopied(false);
+        if (!succeeded) {
+            const textarea = document.createElement("textarea");
+            textarea.value = command;
+            textarea.setAttribute("readonly", "");
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.append(textarea);
+            try {
+                textarea.select();
+                succeeded = document.execCommand("copy");
+            } catch {
+                succeeded = false;
+            } finally {
+                textarea.remove();
+            }
         }
+
+        if (!mounted.current || !succeeded) {
+            if (mounted.current) {
+                setCopied(false);
+            }
+            return;
+        }
+
+        setCopied(true);
+        if (resetTimer.current) {
+            clearTimeout(resetTimer.current);
+        }
+        resetTimer.current = setTimeout(() => setCopied(false), 1400);
     };
 
     return (
@@ -86,58 +132,145 @@ export function Snippet({ command, className = "" }: { command: string; classNam
     );
 }
 
-export function Starfield({
-    children,
-    horizon = false,
-    scanlines = false,
-    className = "",
-}: {
-    children: ReactNode;
+function seeded(seed: number) {
+    let state = seed;
+
+    return () => {
+        state = (state * 1664525 + 1013904223) % 4294967296;
+        return state / 4294967296;
+    };
+}
+
+type StarfieldProps = HTMLAttributes<HTMLDivElement> & {
+    children?: ReactNode;
+    density?: number;
+    fill?: boolean;
+    grid?: boolean;
     horizon?: boolean;
     scanlines?: boolean;
-    className?: string;
-}) {
+    seed?: number;
+    twinkle?: boolean;
+};
+
+type StarStyle = CSSProperties & {
+    "--orbit-star-min": number;
+    "--orbit-star-max": number;
+};
+
+export function Starfield({
+    children,
+    density = 1,
+    fill = false,
+    grid = false,
+    horizon = false,
+    scanlines = false,
+    seed = 7,
+    twinkle = true,
+    className = "",
+    ...props
+}: StarfieldProps) {
+    const stars = useMemo(() => {
+        const random = seeded(seed * 9301 + 49297);
+        const count = Math.round(90 * density);
+
+        return Array.from({ length: count }, () => {
+            const minimumOpacity = 0.14 + random() * 0.3;
+
+            return {
+                delay: (-random() * 10).toFixed(2),
+                duration: (4 + random() * 7).toFixed(2),
+                maximumOpacity: Math.min(1, minimumOpacity + 0.18 + random() * 0.35),
+                minimumOpacity,
+                size: random() > 0.82 ? 1.8 : 1,
+                x: random() * 100,
+                y: random() * 100,
+            };
+        });
+    }, [density, seed]);
+
     return (
         <div
-            className={`orbit-starfield ${horizon ? "orbit-starfield--horizon" : ""} ${scanlines ? "orbit-starfield--scanlines" : ""} ${className}`}
+            className={`orbit-starfield ${fill ? "orbit-starfield--fill" : ""} ${grid ? "orbit-starfield--grid" : ""} ${horizon ? "orbit-starfield--horizon" : ""} ${scanlines ? "orbit-starfield--scanlines" : ""} ${className}`}
+            {...props}
         >
-            <div className="relative">{children}</div>
+            <div className="orbit-starfield__stars" aria-hidden="true">
+                {stars.map((star, index) => (
+                    <span
+                        key={index}
+                        className={twinkle ? "orbit-star orbit-star--twinkle" : "orbit-star"}
+                        style={
+                            {
+                                "--orbit-star-max": star.maximumOpacity,
+                                "--orbit-star-min": star.minimumOpacity,
+                                animationDelay: `${star.delay}s`,
+                                animationDuration: `${star.duration}s`,
+                                height: star.size,
+                                left: `${star.x}%`,
+                                opacity: star.minimumOpacity,
+                                top: `${star.y}%`,
+                                width: star.size,
+                            } as StarStyle
+                        }
+                    />
+                ))}
+            </div>
+            {children ? <div className="relative">{children}</div> : null}
         </div>
     );
 }
 
-type TerminalLine = {
-    kind?: "command" | "out" | "info" | "comment";
+export type TerminalLine = {
+    kind?: "agent" | "command" | "comment" | "error" | "info" | "out" | "warn";
     text: string;
 };
 
-export function Terminal({ title, lines }: { title: string; lines: TerminalLine[] }) {
+export function Terminal({
+    title,
+    lines,
+    dense = false,
+    className = "",
+}: {
+    title: string;
+    lines: TerminalLine[];
+    dense?: boolean;
+    className?: string;
+}) {
     return (
-        <div className="relative overflow-hidden rounded-[10px] border border-orbit-line bg-black shadow-orbit-panel">
+        <div
+            className={`relative overflow-hidden rounded-[10px] border border-orbit-line bg-black shadow-orbit-panel ${className}`}
+        >
             <div className="flex h-[34px] items-center gap-3 border-b border-orbit-hairline bg-orbit-card px-4">
                 <span className="size-1.5 rounded-full bg-orbit-grey-1" />
                 <span className="font-mono text-[10.5px] tracking-[0.16em] text-orbit-muted uppercase">
                     {title}
                 </span>
             </div>
-            <div className="orbit-scanlines relative overflow-x-auto px-4 pt-4 pb-5 font-mono text-[13px] leading-[1.62] tracking-[-0.01em] whitespace-pre">
-                {lines.map((line) => (
+            <div
+                className={`orbit-scanlines relative overflow-x-auto px-4 font-mono tracking-[-0.01em] whitespace-pre ${dense ? "py-3 text-[11.5px] leading-[1.58]" : "pt-4 pb-5 text-[13px] leading-[1.62]"}`}
+            >
+                {lines.map((line, index) => (
                     <div
-                        key={line.text}
+                        key={`${line.text}-${index}`}
                         className={
                             line.kind === "command"
                                 ? "font-medium text-orbit-primary"
                                 : line.kind === "info"
                                   ? "text-orbit-ok"
-                                  : line.kind === "comment"
-                                    ? "text-orbit-muted"
-                                    : "text-orbit-secondary"
+                                  : line.kind === "warn"
+                                    ? "text-orbit-warn"
+                                    : line.kind === "error"
+                                      ? "text-orbit-error"
+                                      : line.kind === "agent"
+                                        ? "text-orbit-info"
+                                        : line.kind === "comment"
+                                          ? "text-orbit-muted"
+                                          : "text-orbit-secondary"
                         }
                     >
                         {line.kind === "command" ? (
                             <span className="text-orbit-muted select-none">$ </span>
                         ) : null}
-                        {line.text}
+                        {line.text || " "}
                     </div>
                 ))}
             </div>

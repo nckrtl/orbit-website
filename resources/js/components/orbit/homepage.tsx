@@ -1,73 +1,123 @@
-import { useState } from "react";
-import { ButtonLink, Card, Icon, Logo, Section, Snippet, Starfield, Terminal } from "./primitives";
+import type { RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+    ButtonLink,
+    Icon,
+    Logo,
+    Snippet,
+    Starfield,
+    Terminal,
+    type TerminalLine,
+} from "./primitives";
 import { OrbitDiagram, type OrbitNode } from "./topology";
 
 const githubUrl = "https://github.com/nckrtl/orbit";
-const docsUrl = `${githubUrl}/tree/main/docs`;
 
-type Stage = {
-    key: "operator" | "gateway" | "development" | "publish";
-    step: string;
-    label: string;
-    headline: string;
-    lead: string;
-    center: { label: string; sub: string; state?: "pending" };
+type Chapter = {
+    aside?: string;
+    body: string;
     caption: string;
-    nodes: OrbitNode[];
+    center?: { label: string; state?: "pending"; sub?: string };
+    command?: { lines: TerminalLine[]; title: string };
+    id: string;
+    kicker: string;
+    nodes?: OrbitNode[];
+    operator?: string;
+    selected?: string;
+    step: string;
+    title: string;
+    type: "diagram" | "laptop" | "topology";
 };
 
-const stages: Stage[] = [
+type RoleState = {
+    database: boolean;
+    dedicatedDatabase: boolean;
+    production: boolean;
+};
+
+const chapters: Chapter[] = [
     {
-        key: "operator",
+        id: "problem",
         step: "01",
-        label: "Operator",
-        headline: "The only tool you need to run your apps on your own infra.",
-        lead: "Install Orbit on your own machine and hand your agent the skill. That is the whole setup: one CLI, no dashboards, no accounts to wire together, and no infrastructure but yours.",
-        center: { label: "Gateway", sub: "not provisioned yet", state: "pending" },
-        caption: "installed locally · nothing provisioned yet",
-        nodes: [],
+        kicker: "The problem",
+        title: "Local development stops when your laptop does.",
+        body: "A local environment on your own machine is hard to beat — until agents start doing the work. Then you want it running while you sleep, and you want to open the project on your tablet, your phone, or a hotel wifi network. localhost does none of that.",
+        aside: "Leaving the laptop on all night is not an environment. It is a workaround.",
+        caption: "lid closes · work stops",
+        type: "laptop",
     },
     {
-        key: "gateway",
+        id: "premise",
         step: "02",
-        label: "Gateway",
-        headline: "One gateway holds every machine and app record you own.",
-        lead: "Your agent provisions the Gateway over SSH. It stores every machine and application record and authorizes each action, so there is exactly one place to look at your setup.",
-        center: { label: "Gateway", sub: "control plane" },
-        caption: "one gateway, provisioned over ssh",
+        kicker: "The premise",
+        title: "Move the work off your machine. Keep the control on it.",
+        body: "Could I manage every machine from my own laptop, without the workload running on it, and still reach every project from anywhere I happen to be? That question is the whole of Orbit. The answer needed a record of what exists, a private network to reach it, and names that resolve inside that network.",
+        center: { label: "Gateway", state: "pending" },
+        operator: "you + agent",
+        caption: "control here · workload elsewhere",
         nodes: [],
+        selected: "operator",
+        type: "diagram",
     },
     {
-        key: "development",
+        id: "gateway",
         step: "03",
-        label: "Development",
-        headline: "Add a development node and every app gets its own URL.",
-        lead: "The Gateway provisions the node, clones your source, and gives each instance a hostname on your development TLD — private to the network, open to every device on it.",
-        center: { label: "Gateway", sub: "control plane" },
-        caption: "app instances orbit their development node",
-        nodes: [
-            {
-                label: "dev-mbp",
-                role: "app-dev",
-                angle: -15,
-                satellites: [
-                    { label: "app-1", role: "app-1", angle: 10 },
-                    { label: "app-2", role: "app-2", angle: 190 },
-                ],
-            },
-        ],
+        kicker: "The Gateway",
+        title: "One service holding the store, the network, and the names.",
+        body: "The Gateway is three roles in one: the store that records every machine, app, and route; a WireGuard layer that issues an identity to each node; and a DNS server that answers for your development TLD. Together they turn a pile of machines into one network you can address.",
+        command: {
+            title: "orbit · gateway",
+            lines: [
+                { kind: "command", text: "orbit gateway:add home" },
+                { kind: "info", text: "Gateway [home] is active." },
+                { kind: "out", text: "WireGuard: 10.88.0.1" },
+                { kind: "out", text: "TLD: orbit.test" },
+                { kind: "comment", text: "Request ID: 01J9K2QP3F7Y" },
+            ],
+        },
+        center: { label: "Gateway" },
+        operator: "you + agent",
+        caption: "the gateway is the network, not just a database",
+        nodes: [],
+        selected: "gateway",
+        type: "diagram",
     },
     {
-        key: "publish",
+        id: "nodes",
         step: "04",
-        label: "Publish",
-        headline: "Apps stay private until you place one on a production node.",
-        lead: "Everything is reachable inside the network by default. To publish, place the app on a production node — where app, router, and ingress roles share a machine or split into a cluster.",
-        center: { label: "Gateway", sub: "control plane" },
-        caption: "a cluster is a mini orbit: app-prod + router + ingress",
+        kicker: "Nodes",
+        title: "Provisioning you did not have to write.",
+        body: "Point Orbit at a machine and it installs what the roles need, joins it to the private network with its own WireGuard identity, and remembers exactly what it put there. Because provisioning is codified, every node comes up the same way — and an agent debugging one has context instead of a blank prompt.",
+        command: {
+            title: "orbit · node:provision",
+            lines: [
+                { kind: "command", text: "orbit node:provision dev-01 --role app-dev" },
+                { kind: "out", text: "wireguard  identity issued    ok" },
+                { kind: "out", text: "php 8.5    installed          ok" },
+                { kind: "out", text: "nginx      configured         ok" },
+                { kind: "info", text: "Node [dev-01] is ready." },
+            ],
+        },
+        center: { label: "Gateway" },
+        operator: "you + agent",
+        caption: "one node, provisioned the same way every time",
+        nodes: [{ label: "dev-01", role: "app-dev", angle: -15 }],
+        selected: "node:dev-01",
+        type: "diagram",
+    },
+    {
+        id: "access",
+        step: "05",
+        kicker: "Access",
+        title: "Every project has a URL that works on every device.",
+        body: "Place an app on the node and it gets a hostname on your development TLD, a runtime picked from its own source, and its processes kept alive. Any device joined to the network opens the same address — laptop, tablet, phone, or the machine you borrowed at a conference.",
+        aside: "Nothing here is public. The network is the boundary.",
+        center: { label: "Gateway" },
+        operator: "you + agent",
+        caption: "app instances orbit their node",
         nodes: [
             {
-                label: "dev-mbp",
+                label: "dev-01",
                 role: "app-dev",
                 angle: -15,
                 satellites: [
@@ -75,547 +125,580 @@ const stages: Stage[] = [
                     { label: "app-2", role: "app-2", angle: 190 },
                 ],
             },
-            {
-                label: "prod-eu-1",
-                role: "app-prod",
-                angle: 175,
-                cluster: "cluster: production",
-                satellites: [
-                    { label: "router-01", role: "router", angle: 30 },
-                    { label: "ingress-01", role: "ingress", angle: 210 },
-                ],
-            },
         ],
+        selected: "sat:dev-01/app-1",
+        type: "diagram",
+    },
+    {
+        id: "topology",
+        step: "06",
+        kicker: "Your topology",
+        title: "Roles are the building blocks. Assemble what you need.",
+        body: "A database beside your apps, or on a machine of its own. A production node when you want something published. Add and remove roles until the shape fits how you work — the commands do not change as the topology grows.",
+        center: { label: "Gateway" },
+        operator: "you + agent",
+        caption: "add roles and watch the network take shape",
+        type: "topology",
     },
 ];
 
-const details = {
-    operator: {
-        caps: [
-            "drives orbit from one cli",
-            "same commands as a human",
-            "structured --json output",
-            "no machine access of its own",
+const heroNodes: OrbitNode[] = [
+    {
+        label: "h1",
+        role: "",
+        angle: 8,
+        cluster: " ",
+        satellites: [
+            { label: "h1a", role: "", angle: 20 },
+            { label: "h1b", role: "", angle: 200 },
         ],
-        title: "you + your agent",
-        kind: "operator",
-        rows: [
-            ["Runs", "locally, on your machine"],
-            ["Talks to", "Gateway over HTTP"],
-            ["Install", "composer global require nckrtl/orbit"],
-        ],
-        note: "The only thing you install yourself. Your agent uses the same commands you do, and every response carries a request ID.",
     },
-    gateway: {
-        caps: [
-            "single source of truth",
-            "authorizes every action",
-            "applies changes over ssh",
-            "records activity + request ids",
+    { label: "h2", role: "", angle: 96, ring: 2 },
+    {
+        label: "h3",
+        role: "",
+        angle: 158,
+        cluster: " ",
+        satellites: [
+            { label: "h3a", role: "", angle: 40 },
+            { label: "h3b", role: "", angle: 220 },
         ],
-        title: "Gateway",
-        kind: "control plane",
-        rows: [
-            ["Stores", "machines, apps, routes, processes"],
-            ["Authorizes", "every action before it reaches a node"],
-            ["Applies changes", "over SSH"],
-            ["Data store", "SQLite"],
-        ],
-        note: "One active Gateway per setup, so there is one place to see everything Orbit manages.",
     },
-    "node:dev-mbp": {
-        caps: [
-            "hosts app instances",
-            "private hostname per instance",
-            "runs attached processes",
-            "collects metrics for the fleet",
-        ],
-        title: "dev-mbp",
-        kind: "node · app-dev",
-        rows: [
-            ["Roles", "app-dev, metrics"],
-            ["WireGuard", "10.88.0.4"],
-            ["TLD", "orbit.test"],
-            ["Platform", "Ubuntu 26.04 (arm64)"],
-        ],
-        note: "Runs development app instances. Each one gets a hostname on the development TLD, reachable from any device on the network.",
+    {
+        label: "h4",
+        role: "",
+        angle: 250,
+        ring: 2,
+        satellites: [{ label: "h4a", role: "", angle: 0 }],
     },
-    "sat:dev-mbp/app-1": {
-        caps: [
-            "own git clone",
-            "php runtime from composer",
-            "one active route",
-            "queue + dev server processes",
-        ],
-        title: "app-1",
-        kind: "appinstance",
-        rows: [
-            ["Node", "dev-mbp"],
-            ["Branch", "main"],
-            ["URL", "https://app-1.orbit.test"],
-            ["Processes", "queue, vite"],
-        ],
-        note: "One placement of an app on one node. Orbit clones the source, selects the PHP runtime, and provisions its single route.",
-    },
-    "sat:dev-mbp/app-2": {
-        caps: [
-            "adopted from a worktree",
-            "stops when idle",
-            "starts on first request",
-            "scheduled tasks as systemd timers",
-        ],
-        title: "app-2",
-        kind: "appinstance",
-        rows: [
-            ["Node", "dev-mbp"],
-            ["Branch", "nck-123-checkout"],
-            ["URL", "https://app-2.orbit.test"],
-            ["Processes", "queue"],
-        ],
-        note: "Register a worktree and it becomes an instance. Idle instances stop their processes and start them again on the next request.",
-    },
-    "node:prod-eu-1": {
-        caps: [
-            "hosts production instances",
-            "publishes over ingress",
-            "round-robin route pool",
-            "cluster member",
-        ],
-        title: "prod-eu-1",
-        kind: "node · app-prod",
-        rows: [
-            ["Roles", "app-prod, router, ingress"],
-            ["Cluster", "production"],
-            ["Public", "yes, through ingress"],
-            ["Pool", "round-robin"],
-        ],
-        note: "Placing an app here publishes it. The router and ingress roles can share this machine or move to their own nodes.",
-    },
-    "sat:prod-eu-1/router-01": {
-        caps: [
-            "one per cluster with routes",
-            "selects workload targets",
-            "follows generated routes",
-        ],
-        title: "router-01",
-        kind: "role · router",
-        rows: [
-            ["Scope", "cluster: production"],
-            ["Receives", "routes with cluster scope"],
-            ["Selects", "workload targets"],
-        ],
-        note: "Every cluster with a route needs one active router. It decides which node serves a clustered hostname.",
-    },
-    "sat:prod-eu-1/ingress-01": {
-        caps: ["public http + https", "tls certificates", "forwards to the router"],
-        title: "ingress-01",
-        kind: "role · ingress",
-        rows: [
-            ["Receives", "public HTTP and HTTPS"],
-            ["Forwards to", "router"],
-            ["Certificates", "managed by Orbit"],
-        ],
-        note: "The only role that accepts traffic from outside the private network.",
-    },
-} as const;
+];
 
-type DetailKey = keyof typeof details;
+const agentLines: TerminalLine[] = [
+    { kind: "agent", text: "# agent: the queue on app-1 looks stuck" },
+    { kind: "command", text: "orbit process:list --instance 12" },
+    { kind: "out", text: "| 31 | queue | php artisan queue:work | running | always |" },
+    { kind: "command", text: "orbit process:logs 31 --lines 20" },
+    { kind: "out", text: "[2026-09-07 11:02:14] redis connection refused" },
+    { kind: "command", text: "orbit doctor --node 2 --family tool" },
+    { kind: "warn", text: "| dev-01 | tool | drift | 4 | tool.service_stopped: redis |" },
+    { kind: "command", text: "orbit tool:action redis restart" },
+    { kind: "info", text: "Tool [redis] is running." },
+    { kind: "comment", text: "Request ID: 01J9K2QN7X4B" },
+];
 
-function stageKeys(stage: Stage): DetailKey[] {
-    const keys: DetailKey[] = ["operator", "gateway"];
+function useLaptopPhase() {
+    const [phase, setPhase] = useState<"closed" | "dim" | "run">("run");
 
-    for (const node of stage.nodes) {
-        keys.push(`node:${node.label}` as DetailKey);
-        for (const satellite of node.satellites) {
-            keys.push(`sat:${node.label}/${satellite.label}` as DetailKey);
-        }
-    }
+    useEffect(() => {
+        const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let freezeTimer: ReturnType<typeof setTimeout> | null = null;
+        let dimTimer: ReturnType<typeof setTimeout> | null = null;
+        let cycleTimer: ReturnType<typeof setTimeout> | null = null;
 
-    return keys;
+        const clear = () => {
+            if (freezeTimer) clearTimeout(freezeTimer);
+            if (dimTimer) clearTimeout(dimTimer);
+            if (cycleTimer) clearTimeout(cycleTimer);
+            freezeTimer = null;
+            dimTimer = null;
+            cycleTimer = null;
+        };
+
+        const cycle = () => {
+            clear();
+            setPhase("run");
+            freezeTimer = setTimeout(() => setPhase("closed"), 4200);
+            dimTimer = setTimeout(() => setPhase("dim"), 4900);
+            cycleTimer = setTimeout(cycle, 7400);
+        };
+
+        const sync = () => {
+            clear();
+            if (query.matches) {
+                setPhase("run");
+                return;
+            }
+            cycle();
+        };
+
+        sync();
+        query.addEventListener("change", sync);
+
+        return () => {
+            query.removeEventListener("change", sync);
+            clear();
+        };
+    }, []);
+
+    return phase;
 }
 
-function Header() {
+function usePageMotion(
+    headerWash: RefObject<HTMLDivElement | null>,
+    firstRuler: RefObject<HTMLDivElement | null>,
+    secondRuler: RefObject<HTMLDivElement | null>,
+) {
+    useEffect(() => {
+        const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let frame = 0;
+        let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const paint = () => {
+            frame = 0;
+            const scrollY = window.scrollY || 0;
+            if (headerWash.current) {
+                headerWash.current.style.opacity = scrollY > 4 ? "1" : "0";
+            }
+
+            const offset = query.matches ? 0 : -scrollY * 0.45;
+            if (firstRuler.current) {
+                firstRuler.current.style.backgroundPosition = `${offset}px 100%, ${offset}px 100%`;
+            }
+            if (secondRuler.current) {
+                secondRuler.current.style.backgroundPosition = `${offset}px 0, ${offset}px 0`;
+            }
+        };
+
+        const schedule = () => {
+            if (!frame) {
+                frame = requestAnimationFrame(paint);
+            }
+        };
+
+        window.addEventListener("scroll", schedule, { passive: true });
+        window.addEventListener("resize", schedule);
+        query.addEventListener("change", schedule);
+        schedule();
+        settleTimer = setTimeout(schedule, 400);
+
+        return () => {
+            window.removeEventListener("scroll", schedule);
+            window.removeEventListener("resize", schedule);
+            query.removeEventListener("change", schedule);
+            if (settleTimer) clearTimeout(settleTimer);
+            if (frame) cancelAnimationFrame(frame);
+        };
+    }, [firstRuler, headerWash, secondRuler]);
+}
+
+function Header({ washRef }: { washRef: RefObject<HTMLDivElement | null> }) {
     return (
-        <header className="sticky top-0 z-20 border-b border-orbit-hairline bg-orbit-header backdrop-blur-[14px] backdrop-saturate-90">
-            <div className="relative mx-auto flex h-16 max-w-orbit-container items-center gap-8 px-orbit-gutter">
+        <header className="orbit-story-header">
+            <div ref={washRef} aria-hidden="true" className="orbit-story-header__wash" />
+            <div className="orbit-story-header__inner">
                 <a href="#top" aria-label="Orbit home" className="border-0">
                     <Logo />
                 </a>
-                <nav
-                    aria-label="Primary navigation"
-                    className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-6 font-mono text-xs tracking-[0.16em] text-orbit-muted uppercase md:flex"
-                >
-                    <a href="#product">Product</a>
-                    <a href="#features">Features</a>
-                    <a href="#agents">Agents</a>
+                <nav aria-label="Primary navigation" className="orbit-story-nav">
+                    <a href="#story">Story</a>
+                    <a href="#build">Build</a>
                     <a href="#install">Install</a>
                 </nav>
-                <div className="ml-auto flex items-center gap-2 sm:gap-3">
-                    <ButtonLink
-                        href={githubUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        variant="ghost"
-                        size="sm"
-                        className="hidden sm:inline-flex"
-                    >
-                        <Icon name="git-branch" className="size-3.5" />
-                        GitHub
-                    </ButtonLink>
-                    <ButtonLink href="#install" size="sm">
-                        Get started
-                    </ButtonLink>
-                </div>
+                <ButtonLink href="#install" size="sm" className="ml-auto">
+                    Get started
+                </ButtonLink>
             </div>
         </header>
     );
 }
 
-function DetailReadout({ selected }: { selected: DetailKey }) {
-    const detail = details[selected];
-
+function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
     return (
-        <div
-            className="flex min-h-[150px] flex-col gap-3 rounded-[10px] border border-orbit-line bg-black p-5"
-            aria-live="polite"
-        >
-            <div className="flex items-baseline justify-between gap-3">
-                <span className="font-mono text-[13.5px] text-orbit-primary">{detail.title}</span>
-                <span className="font-mono text-[9.5px] tracking-[0.16em] text-orbit-muted uppercase">
-                    {detail.kind}
-                </span>
-            </div>
-            <dl className="grid grid-cols-[minmax(96px,auto)_1fr] gap-x-5 gap-y-1.5 font-mono text-xs">
-                {detail.rows.map(([key, value]) => (
-                    <div key={key} className="contents">
-                        <dt className="text-orbit-muted">{key}</dt>
-                        <dd className="m-0 min-w-0 wrap-anywhere text-orbit-secondary">{value}</dd>
+        <div className="orbit-story-hero-shell">
+            <div className="orbit-story-hero">
+                <Starfield density={3.6} fill className="z-0" />
+                <div className="orbit-story-constellation" aria-hidden="true">
+                    <div className="orbit-story-constellation__inner">
+                        <OrbitDiagram
+                            data-hero-constellation
+                            labels={false}
+                            stats
+                            statsZone={[0.42, 0.56]}
+                            center={{ label: "", sub: "" }}
+                            nodes={heroNodes}
+                            speed={1.1}
+                            packetSize={1.1}
+                        />
                     </div>
-                ))}
-            </dl>
-            <p className="text-[12.5px] leading-normal text-orbit-muted">{detail.note}</p>
-            <div className="orbit-marquee mt-auto overflow-hidden border-t border-orbit-hairline pt-3.5">
-                <div className="orbit-marquee__track flex w-max gap-2.5">
-                    {[...detail.caps, ...detail.caps].map((capability, index) => (
-                        <span
-                            key={`${capability}-${index}`}
-                            className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[10.5px] tracking-[0.1em] text-orbit-secondary uppercase"
-                        >
-                            <Icon name="check" className="size-[11px]" />
-                            {capability}
-                        </span>
-                    ))}
                 </div>
+                <div className="orbit-story-blur orbit-story-blur--1" aria-hidden="true" />
+                <div className="orbit-story-blur orbit-story-blur--2" aria-hidden="true" />
+                <div className="orbit-story-blur orbit-story-blur--3" aria-hidden="true" />
+                <div className="orbit-story-blur orbit-story-blur--4" aria-hidden="true" />
+                <div className="orbit-story-blur orbit-story-blur--solid" aria-hidden="true" />
+                <section data-hero className="orbit-story-hero__copy">
+                    <div className="max-w-[min(62ch,60%)]">
+                        <div className="orbit-label mb-5">
+                            Open source · self-hosted · agent-driven
+                        </div>
+                        <h1 className="max-w-[24ch] text-[clamp(38px,4vw,64px)] leading-[0.98] font-medium tracking-[-0.035em]">
+                            Develop your ideas faster on your own agent-run infra.
+                        </h1>
+                        <p className="mt-[26px] max-w-[52ch] text-lg leading-[1.58] tracking-[-0.018em] text-orbit-secondary">
+                            Orbit turns the machines you already own into an always-on development
+                            network — provisioned, routed, and repaired by your agent, reachable
+                            from every device you carry.
+                        </p>
+                        <div className="mt-8 flex flex-wrap gap-4">
+                            <ButtonLink href="#story">Read the story</ButtonLink>
+                            <ButtonLink href="#install" variant="outline">
+                                Quickstart
+                            </ButtonLink>
+                        </div>
+                        <Snippet
+                            command="composer global require nckrtl/orbit"
+                            className="mt-6 max-w-[420px]"
+                        />
+                    </div>
+                </section>
+                <Ruler rulerRef={rulerRef} position="bottom" />
             </div>
         </div>
     );
 }
 
-function Hero() {
-    const [stageKey, setStageKey] = useState<Stage["key"]>("operator");
-    const [selected, setSelected] = useState<DetailKey>("operator");
-    const stage = stages.find((item) => item.key === stageKey) ?? stages[0];
-
-    const selectStage = (nextStage: Stage) => {
-        setStageKey(nextStage.key);
-        setSelected((current) => (stageKeys(nextStage).includes(current) ? current : "gateway"));
-    };
-
+function Ruler({
+    position,
+    rulerRef,
+}: {
+    position: "bottom" | "top";
+    rulerRef: RefObject<HTMLDivElement | null>;
+}) {
     return (
-        <Starfield horizon>
-            <div className="mx-auto grid max-w-orbit-container items-center gap-16 border-b border-orbit-hairline px-orbit-gutter pt-[clamp(56px,7vw,104px)] pb-[clamp(72px,9vw,140px)] lg:grid-cols-2">
-                <div className="min-w-0">
-                    <div
-                        role="tablist"
-                        aria-label="Orbit setup stages"
-                        className="noscrollbar -mx-5 mb-7 flex overflow-x-auto px-5 md:mx-0 md:flex-wrap md:px-0"
-                    >
-                        {stages.map((item, index) => (
-                            <button
-                                key={item.key}
-                                id={`stage-tab-${item.key}`}
-                                type="button"
-                                role="tab"
-                                tabIndex={item.key === stage.key ? 0 : -1}
-                                aria-selected={item.key === stage.key}
-                                aria-controls="stage-panel"
-                                onClick={() => selectStage(item)}
-                                onKeyDown={(event) => {
-                                    const offsets: Record<string, number> = {
-                                        ArrowLeft: -1,
-                                        ArrowRight: 1,
-                                    };
-                                    const targetIndex =
-                                        event.key === "Home"
-                                            ? 0
-                                            : event.key === "End"
-                                              ? stages.length - 1
-                                              : offsets[event.key] === undefined
-                                                ? null
-                                                : (index + offsets[event.key] + stages.length) %
-                                                  stages.length;
-
-                                    if (targetIndex === null) {
-                                        return;
-                                    }
-
-                                    event.preventDefault();
-                                    const target = stages[targetIndex];
-                                    selectStage(target);
-                                    document.getElementById(`stage-tab-${target.key}`)?.focus();
-                                }}
-                                className="orbit-stage-tab"
-                            >
-                                <span>{item.step}</span>
-                                {item.label}
-                            </button>
-                        ))}
-                    </div>
-                    <div
-                        key={stage.key}
-                        id="stage-panel"
-                        role="tabpanel"
-                        aria-labelledby={`stage-tab-${stage.key}`}
-                        className="orbit-stage-copy"
-                    >
-                        <h1 className="min-h-[1.96em] text-orbit-hero">{stage.headline}</h1>
-                        <p className="mt-6 min-h-[4.74em] max-w-[52ch] text-lg leading-[1.58] tracking-[-0.018em] text-orbit-secondary">
-                            {stage.lead}
-                        </p>
-                    </div>
-                    <div className="mt-8 flex flex-wrap gap-4">
-                        <ButtonLink href={docsUrl} target="_blank" rel="noreferrer">
-                            Read the docs
-                            <Icon name="arrow-right" className="size-4" />
-                        </ButtonLink>
-                        <ButtonLink href="#install" variant="outline">
-                            <Icon name="terminal" className="size-4" />
-                            Quickstart
-                        </ButtonLink>
-                    </div>
-                    <Snippet
-                        command="composer global require nckrtl/orbit"
-                        className="mt-6 max-w-[420px]"
-                    />
-                </div>
-                <div className="flex min-w-0 flex-col gap-9">
-                    <div key={stage.key} className="orbit-stage-diagram">
-                        <OrbitDiagram
-                            center={stage.center}
-                            nodes={stage.nodes}
-                            caption={stage.caption}
-                            selected={selected}
-                            onSelect={(key) =>
-                                setSelected(key in details ? (key as DetailKey) : "gateway")
-                            }
-                        />
-                    </div>
-                    <DetailReadout selected={selected} />
-                </div>
-            </div>
-        </Starfield>
+        <div aria-hidden="true" className={`orbit-story-ruler orbit-story-ruler--${position}`}>
+            <div ref={rulerRef} className="orbit-story-ruler__marks" />
+        </div>
     );
 }
 
-const lifecycle = [
-    {
-        number: "01",
-        icon: "terminal",
-        title: "Operator",
-        description:
-            "Install Orbit on your own machine and give your agent the skill. Nothing else to sign up for.",
-        command: "composer global require nckrtl/orbit",
-    },
-    {
-        number: "02",
-        icon: "network",
-        title: "Gateway",
-        description:
-            "Your agent provisions the control plane. It stores every machine and application record and authorizes each action.",
-        command: "orbit gateway:add",
-    },
-    {
-        number: "03",
-        icon: "boxes",
-        title: "Development node",
-        description:
-            "Add a machine for development work. Place an app on it and Orbit clones the source, picks the runtime, and provisions the route.",
-        command: "orbit instance:new",
-    },
-    {
-        number: "04",
-        icon: "rocket",
-        title: "Publish",
-        description:
-            "Projects stay inside the network until you place one on a production node — alone, or clustered with the router and ingress roles.",
-        command: "orbit node:provision --role app-prod",
-    },
-];
-
-function Product() {
+function StoryDivider({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
     return (
-        <Section
-            id="product"
-            label="One path"
-            title="From your laptop to a published app."
-            lead="Every stage uses the same records and the same CLI. Nothing to reconcile between four dashboards."
-        >
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {lifecycle.map((item) => (
-                    <Card key={item.number} grid className="flex min-h-[280px] flex-col gap-4">
-                        <div className="flex items-center justify-between">
-                            <Icon name={item.icon} />
-                            <span className="font-mono text-[10.5px] tracking-[0.16em] text-orbit-muted">
-                                {item.number}
-                            </span>
+        <>
+            <div aria-hidden="true" className="orbit-story-hatch" />
+            <Ruler rulerRef={rulerRef} position="top" />
+        </>
+    );
+}
+
+function Laptop({ phase }: { phase: "closed" | "dim" | "run" }) {
+    const closed = phase !== "run";
+
+    return (
+        <div className="flex w-full flex-col items-center">
+            <div data-laptop className="orbit-laptop-scene">
+                <div className="orbit-laptop">
+                    <div className="orbit-laptop__base">
+                        <div className="orbit-laptop__keyboard" />
+                        <div className="orbit-laptop__trackpad" />
+                    </div>
+                    <div className="orbit-laptop__front" />
+                    <div className="orbit-laptop__side" />
+                    <div data-lid={closed ? "closed" : "open"} className="orbit-laptop__lid">
+                        <div
+                            data-sess
+                            data-run={closed ? "0" : "1"}
+                            className="orbit-laptop__session"
+                        >
+                            <div className="orbit-session-line orbit-session-line--1 text-orbit-primary">
+                                <span className="text-orbit-muted">❯</span> agent run &quot;tidy up
+                                Node.php&quot;
+                            </div>
+                            <div className="orbit-session-line orbit-session-line--2">
+                                · read src/Orbit/Node.php · 412 lines
+                            </div>
+                            <div className="orbit-session-line orbit-session-line--3">
+                                · edit src/Orbit/Node.php, NodeTest.php
+                            </div>
+                            <div className="orbit-session-line orbit-session-line--4">
+                                <span className="text-orbit-primary">+34</span>{" "}
+                                <span className="text-orbit-faint">−12</span> across 2 files
+                            </div>
+                            <div className="orbit-session-line orbit-session-line--5 text-orbit-primary">
+                                <span className="text-orbit-muted">❯</span> vendor/bin/pest{" "}
+                                <span data-caret className="orbit-laptop__caret" />
+                            </div>
+                            <div className="mt-auto flex items-center gap-2.5">
+                                <div className="h-[3px] flex-1 bg-orbit-hairline">
+                                    <div data-bar className="orbit-laptop__progress" />
+                                </div>
+                                <span className="text-[11px] text-orbit-faint">tests</span>
+                            </div>
                         </div>
-                        <h3 className="text-[21px] tracking-[-0.018em]">{item.title}</h3>
-                        <p className="flex-1 text-[13.5px] leading-[1.58] text-orbit-secondary">
-                            {item.description}
-                        </p>
-                        <code className="text-xs break-words text-orbit-muted">{item.command}</code>
-                    </Card>
-                ))}
+                    </div>
+                </div>
             </div>
-        </Section>
+            <div className="orbit-label mt-2 text-center">lid closes · work stops</div>
+        </div>
     );
 }
 
-const features = [
+function topologyNodes(roles: RoleState): OrbitNode[] {
+    const developmentSatellites = [{ label: "app-1", role: "app-1", angle: 10 }];
+
+    if (roles.database && !roles.dedicatedDatabase) {
+        developmentSatellites.push({ label: "database", role: "database", angle: 190 });
+    }
+
+    const nodes: OrbitNode[] = [
+        {
+            label: "dev-01",
+            role: "app-dev",
+            angle: -15,
+            satellites: developmentSatellites,
+        },
+    ];
+
+    if (roles.dedicatedDatabase) {
+        nodes.push({ label: "db-01", role: "database", angle: 120, ring: 2 });
+    }
+
+    if (roles.production) {
+        nodes.push({
+            label: "prod-01",
+            role: "app-prod",
+            angle: 185,
+            cluster: "cluster: production",
+            satellites: [
+                { label: "router-01", role: "router", angle: 30 },
+                { label: "ingress-01", role: "ingress", angle: 210 },
+            ],
+        });
+    }
+
+    return nodes;
+}
+
+function RoleChips({
+    roles,
+    setRoles,
+}: {
+    roles: RoleState;
+    setRoles: (roles: RoleState) => void;
+}) {
+    const definitions: { key: keyof RoleState; label: string }[] = [
+        { key: "database", label: "database on dev-01" },
+        { key: "dedicatedDatabase", label: "dedicated database node" },
+        { key: "production", label: "production node + cluster" },
+    ];
+
+    return (
+        <div className="mt-8 flex flex-wrap gap-2.5" aria-label="Topology roles">
+            {definitions.map((definition) => {
+                const active = roles[definition.key];
+
+                return (
+                    <button
+                        key={definition.key}
+                        type="button"
+                        data-role-chip={definition.key}
+                        aria-pressed={active}
+                        onClick={() => setRoles({ ...roles, [definition.key]: !active })}
+                        className={`orbit-role-chip ${active ? "orbit-role-chip--active" : ""}`}
+                    >
+                        <Icon name={active ? "check" : "plus"} className="size-3" />
+                        {definition.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
+function Story() {
+    const laptopPhase = useLaptopPhase();
+    const [roles, setRoles] = useState<RoleState>({
+        database: true,
+        dedicatedDatabase: false,
+        production: false,
+    });
+
+    return (
+        <div id="story" className="orbit-story-chapters">
+            <Starfield density={3.6} fill />
+            {chapters.map((chapter) => (
+                <section
+                    key={chapter.id}
+                    data-chapter={chapter.id}
+                    data-screen-label={chapter.step}
+                    className="orbit-story-chapter"
+                >
+                    <div className="orbit-story-chapter__grid">
+                        <div className="orbit-story-chapter__copy">
+                            <div className="mb-[22px] flex items-baseline gap-2.5 font-mono text-[10.5px] tracking-[0.16em] uppercase">
+                                <span className="text-orbit-muted">{chapter.step}</span>
+                                <span className="text-orbit-secondary">{chapter.kicker}</span>
+                            </div>
+                            <h2 className="max-w-[26ch] text-[clamp(28px,2.9vw,40px)] leading-[1.1] font-medium tracking-[-0.032em]">
+                                {chapter.title}
+                            </h2>
+                            <p className="mt-6 max-w-[52ch] text-base leading-[1.62] text-orbit-secondary">
+                                {chapter.body}
+                            </p>
+                            {chapter.aside ? (
+                                <p className="mt-5 max-w-[52ch] text-sm leading-[1.6] text-orbit-muted">
+                                    {chapter.aside}
+                                </p>
+                            ) : null}
+                            {chapter.type === "topology" ? (
+                                <RoleChips roles={roles} setRoles={setRoles} />
+                            ) : null}
+                            {chapter.command ? (
+                                <Terminal
+                                    title={chapter.command.title}
+                                    lines={chapter.command.lines}
+                                    dense
+                                    className="mt-8"
+                                />
+                            ) : null}
+                        </div>
+                        <div className="orbit-story-chapter__visual">
+                            {chapter.type === "laptop" ? <Laptop phase={laptopPhase} /> : null}
+                            {chapter.type === "diagram" ? (
+                                <OrbitDiagram
+                                    operator={chapter.operator}
+                                    center={chapter.center}
+                                    nodes={chapter.nodes}
+                                    caption={chapter.caption}
+                                    statsZone={[0.02, 0.74]}
+                                    stats
+                                    selected={chapter.selected}
+                                />
+                            ) : null}
+                            {chapter.type === "topology" ? (
+                                <OrbitDiagram
+                                    operator={chapter.operator}
+                                    center={chapter.center}
+                                    nodes={topologyNodes(roles)}
+                                    caption={chapter.caption}
+                                    statsZone={[0.02, 0.74]}
+                                    stats
+                                />
+                            ) : null}
+                        </div>
+                    </div>
+                </section>
+            ))}
+        </div>
+    );
+}
+
+const agentBenefits = [
     {
-        icon: "network",
-        title: "A private network between your machines",
-        description:
-            "Nodes reach the Gateway and each other over WireGuard. Traffic between your machines never leaves the network, so a project stays private while still being reachable from everywhere you work.",
-        command: "orbit node:access:add · orbit dns:resolve-tld",
-        wide: true,
+        icon: "sparkles",
+        title: "One interface for logs, actions, and state",
+        body: "The agent reads a process log or restarts a service the same way on every node, instead of inventing an SSH incantation each time.",
     },
     {
-        icon: "server",
-        title: "Node provisioning",
-        description:
-            "Add a machine, give it roles, and Orbit installs and configures what those roles need. Remove a role and it cleans up after itself.",
-        command: "orbit node:provision",
-    },
-    {
-        icon: "hard-drive",
-        title: "Tools and runtimes",
-        description:
-            "Install and update the services a project needs, and let Orbit pick the PHP runtime from the source it clones.",
-        command: "orbit tool:install",
-    },
-    {
-        icon: "globe",
-        title: "Reachable on any device, published only when you say so",
-        description:
-            "Every instance gets a hostname on your development TLD, so the phone on your desk opens the same URL your laptop does. Routes belong to the app and follow their target node; nothing reaches the public internet until you place the app on a production node.",
-        command: "orbit route:new · orbit route:target:set",
-        wide: true,
-    },
-    {
-        icon: "activity",
-        title: "Processes and schedules that look after themselves",
-        description:
-            "Attach queues, dev servers, and scheduled tasks to an instance. Orbit keeps them running, stops them when a project goes idle, and starts them again on the next request.",
-        command: "orbit process:add · orbit process:logs",
-        wide: true,
+        icon: "boxes",
+        title: "Placement is deterministic",
+        body: "An app placed on a node is set up the same way on any node, because the steps are codified in Orbit rather than improvised per machine.",
     },
     {
         icon: "stethoscope",
-        title: "Doctor and activity",
-        description:
-            "Compare what the Gateway expects with what is on a machine. Doctor reports every difference and changes nothing.",
-        command: "orbit doctor --family route",
+        title: "Drift is reported, not guessed at",
+        body: "orbit doctor compares what the Gateway expects with what is on the machine, and changes nothing.",
     },
 ];
 
-function Features() {
+function Build() {
     return (
-        <Section
-            id="features"
-            label="The toolkit"
-            title="Everything the stack needs, in one set of records."
-            compact
-        >
-            <div className="grid gap-4 md:grid-cols-3">
-                {features.map((feature) => (
-                    <Card
-                        key={feature.title}
-                        className={`flex min-h-[250px] min-w-0 flex-col gap-4 ${feature.wide ? "md:col-span-2" : ""}`}
-                    >
-                        <Icon name={feature.icon} />
-                        <h3 className="max-w-[32ch] text-[21px] tracking-[-0.018em]">
-                            {feature.title}
-                        </h3>
-                        <p className="max-w-[56ch] flex-1 text-[13.5px] leading-[1.58] text-orbit-secondary">
-                            {feature.description}
-                        </p>
-                        <code className="text-xs break-words text-orbit-muted">
-                            {feature.command}
-                        </code>
-                    </Card>
-                ))}
+        <section id="build" className="orbit-story-build">
+            <div className="orbit-label mb-4">What it costs your agent</div>
+            <h2 className="max-w-[min(24ch,calc(50%_-_28px))] text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em] max-md:max-w-[24ch]">
+                Codified operations, so the agent stops guessing.
+            </h2>
+            <div className="orbit-story-build__grid">
+                <div className="flex flex-col gap-[22px]">
+                    {agentBenefits.map((benefit) => (
+                        <div key={benefit.title} className="flex gap-3.5">
+                            <Icon name={benefit.icon} className="mt-[3px] size-[18px] shrink-0" />
+                            <div>
+                                <h3 className="text-[17px] font-medium tracking-[-0.018em]">
+                                    {benefit.title}
+                                </h3>
+                                <p className="mt-2 max-w-[44ch] text-[13.5px] leading-[1.58] text-orbit-secondary">
+                                    {benefit.title === "Drift is reported, not guessed at" ? (
+                                        <>
+                                            <code className="text-[12.5px]">orbit doctor</code>{" "}
+                                            compares what the Gateway expects with what is on the
+                                            machine, and changes nothing.
+                                        </>
+                                    ) : (
+                                        benefit.body
+                                    )}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <Terminal title="orbit · agent session" lines={agentLines} />
             </div>
-        </Section>
+        </section>
     );
 }
 
-const agentOutput = [
-    { kind: "command" as const, text: "orbit node:list --json" },
-    { text: "{" },
-    { text: '  "nodes": [' },
-    { text: '    { "id": 2, "name": "dev-mbp",' },
-    { text: '      "status": "ready",' },
-    { text: '      "roles": ["app-dev"],' },
-    { text: '      "tld": "orbit.test",' },
-    { text: '      "wireguard_ip": "10.88.0.4" }' },
-    { text: "  ]," },
-    { text: '  "request_id": "01J9K2QFV3H8"' },
-    { text: "}" },
+const ownedMachines = [
+    { icon: "hard-drive", name: "old desktop", role: "app-dev + database roles" },
+    { icon: "cpu", name: "mini pc", role: "gateway: store, wireguard, dns" },
+    { icon: "globe", name: "rented vps", role: "app-prod + ingress, for what you publish" },
 ];
 
-function Agents() {
+function OwnedMachine() {
     return (
-        <Section id="agents" compact>
-            <div className="grid items-center gap-10 md:grid-cols-2">
+        <div className="border-t border-orbit-hairline">
+            <section className="orbit-owned-machine">
                 <div>
-                    <div className="orbit-label mb-4">Built for agents</div>
-                    <h2 className="text-orbit-section">
-                        You don't manage Orbit. Your agent drives it for you.
+                    <div className="orbit-label mb-4">Use what you own</div>
+                    <h2 className="max-w-[22ch] text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em]">
+                        That machine in the closet is a node.
                     </h2>
-                    <p className="mt-5 max-w-[50ch] text-[15px] leading-[1.58] text-orbit-secondary">
-                        Every operation is encoded in Orbit, so the agent only needs the commands.{" "}
-                        <code>--json</code> gives it a stable contract, and the Gateway authorizes
-                        each action before it touches a machine.
+                    <p className="mt-5 max-w-[50ch] text-base leading-[1.6] text-orbit-secondary">
+                        An old desktop, a mini PC, a spare laptop, a rented box — anything that runs
+                        Ubuntu 26.04 and accepts an SSH key can join the network and start hosting
+                        apps. No third-party platform in the middle, no per-seat pricing, no data
+                        leaving your hardware.
+                    </p>
+                    <p className="mt-[18px] max-w-[50ch] text-sm leading-[1.6] text-orbit-muted">
+                        Orbit is open source. Read it, fork it, run it on your own terms.
                     </p>
                 </div>
-                <Terminal title="orbit node:list --json" lines={agentOutput} />
-            </div>
-        </Section>
+                <div className="grid gap-3">
+                    {ownedMachines.map((machine) => (
+                        <div key={machine.name} className="orbit-machine-card">
+                            <Icon name={machine.icon} className="size-[18px] shrink-0" />
+                            <div>
+                                <div className="font-mono text-[12.5px] text-orbit-primary">
+                                    {machine.name}
+                                </div>
+                                <div className="mt-[3px] text-[13px] text-orbit-muted">
+                                    {machine.role}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        </div>
     );
 }
 
 function Install() {
     return (
-        <Starfield scanlines>
-            <div
-                id="install"
-                className="mx-auto max-w-orbit-narrow px-orbit-gutter py-orbit-section text-center"
-            >
-                <h2 className="text-orbit-section">Install it, point it at a machine.</h2>
-                <p className="mx-auto mt-5 max-w-[46ch] text-lg leading-[1.58] text-orbit-secondary">
-                    PHP 8.5 and one command. The Gateway takes it from there.
+        <div className="border-t border-orbit-hairline">
+            <section id="install" className="orbit-story-install">
+                <h2 className="text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em]">
+                    One install, then tell your agent.
+                </h2>
+                <p className="mx-auto mt-5 max-w-[46ch] text-[17px] leading-[1.58] text-orbit-secondary">
+                    PHP 8.5 and one command on your own machine. Everything after that happens on
+                    hardware you control.
                 </p>
                 <Snippet
                     command="composer global require nckrtl/orbit"
                     className="mx-auto mt-8 max-w-[420px] text-left"
                 />
-                <ButtonLink href={githubUrl} target="_blank" rel="noreferrer" className="mt-6">
-                    View on GitHub
-                    <Icon name="arrow-right" className="size-[15px]" />
-                </ButtonLink>
-            </div>
-        </Starfield>
+            </section>
+        </div>
     );
 }
 
@@ -625,29 +708,34 @@ function Footer() {
             <div className="mx-auto flex max-w-orbit-container flex-wrap gap-6 font-mono text-[10.5px] tracking-[0.16em] text-orbit-muted uppercase">
                 <span>Orbit</span>
                 <span>v0.4.0</span>
-                <a
-                    href={githubUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="border-0 md:ml-auto"
-                >
-                    GitHub
+                <a href={githubUrl} target="_blank" rel="noreferrer">
+                    Open source
                 </a>
-                <span className="ml-auto md:ml-0">Self-hosted</span>
+                <span className="ml-auto">Self-hosted</span>
             </div>
         </footer>
     );
 }
 
 export function OrbitHomepage() {
+    const headerWash = useRef<HTMLDivElement>(null);
+    const firstRuler = useRef<HTMLDivElement>(null);
+    const secondRuler = useRef<HTMLDivElement>(null);
+
+    usePageMotion(headerWash, firstRuler, secondRuler);
+
     return (
-        <div id="top" className="min-h-screen bg-orbit-void text-orbit-primary antialiased">
-            <Header />
+        <div
+            id="top"
+            className="min-h-screen overflow-x-clip bg-orbit-void text-orbit-primary antialiased"
+        >
+            <Header washRef={headerWash} />
             <main>
-                <Hero />
-                <Product />
-                <Features />
-                <Agents />
+                <Hero rulerRef={firstRuler} />
+                <StoryDivider rulerRef={secondRuler} />
+                <Story />
+                <Build />
+                <OwnedMachine />
                 <Install />
             </main>
             <Footer />

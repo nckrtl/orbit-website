@@ -1,35 +1,35 @@
 <?php
 
-it('switches hero stages and topology details', function () {
+it('lets readers reshape the topology with role chips', function () {
     $page = visit('/');
 
-    $page->assertSee('The only tool you need to run your apps on your own infra.')
-        ->click('#stage-tab-development')
-        ->assertSee('Add a development node and every app gets its own URL.')
-        ->click('[aria-label="Inspect app-1"]')
-        ->assertSee('own git clone')
-        ->click('#stage-tab-publish')
-        ->assertSee('Apps stay private until you place one on a production node.')
-        ->click('[aria-label="Inspect prod-eu-1"]')
-        ->assertSee('round-robin route pool')
+    $page->assertAttribute('[data-role-chip="database"]', 'aria-pressed', 'true')
+        ->assertAttribute('[data-role-chip="dedicatedDatabase"]', 'aria-pressed', 'false')
+        ->click('[data-role-chip="dedicatedDatabase"]')
+        ->assertAttribute('[data-role-chip="dedicatedDatabase"]', 'aria-pressed', 'true')
+        ->assertSee('db-01')
+        ->click('[data-role-chip="production"]')
+        ->assertAttribute('[data-role-chip="production"]', 'aria-pressed', 'true')
+        ->assertSee('prod-01')
         ->assertNoJavaScriptErrors();
 });
 
-it('supports keyboard stage activation and command copying', function () {
+it('supports keyboard role activation and command copying', function () {
     $page = visit('/');
 
-    $page->keys('#stage-tab-gateway', 'Enter')
-        ->assertSee('One gateway holds every machine and app record you own.')
+    $page->keys('[data-role-chip="production"]', 'Enter')
+        ->assertAttribute('[data-role-chip="production"]', 'aria-pressed', 'true')
         ->click('#install [aria-label^="Copy composer global require"]')
         ->assertSee('Copied')
         ->assertNoJavaScriptErrors();
 });
 
-it('renders the mobile layout without overflow or javascript errors', function () {
+it('renders the story mobile layout without overflow or javascript errors', function () {
     $page = visit('/')->on()->mobile();
 
-    $page->assertSee('The only tool you need to run your apps on your own infra.')
+    $page->assertSee('Develop your ideas faster on your own agent-run infra.')
         ->assertScript('document.documentElement.scrollWidth <= document.documentElement.clientWidth', true)
-        ->assertScript('getComputedStyle(document.querySelector("nav[aria-label=\"Primary navigation\"]")).display', 'none')
-        ->assertNoJavaScriptErrors();
+        ->assertScript('getComputedStyle(document.querySelector("nav[aria-label=\"Primary navigation\"]")).display', 'flex')
+        ->assertNoJavaScriptErrors()
+        ->assertNoConsoleLogs();
 });
