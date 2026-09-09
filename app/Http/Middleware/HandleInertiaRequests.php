@@ -4,12 +4,28 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\AgentDocsController;
+use Closure;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
     protected $rootView = 'app';
+
+    #[\Override]
+    public function handle(Request $request, Closure $next): Response
+    {
+        $response = parent::handle($request, $next);
+
+        if ($request->is('/')) {
+            $response->setVary(['Accept', 'User-Agent'], false);
+            $response->headers->set('Link', '<'.action([AgentDocsController::class, 'gettingStarted'], absolute: false).'>; rel="alternate"; type="text/markdown"', false);
+        }
+
+        return $response;
+    }
 
     #[\Override]
     public function version(Request $request): ?string

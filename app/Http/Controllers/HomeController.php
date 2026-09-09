@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use Inertia\Response;
-use Inertia\ResponseFactory;
+use App\Support\OrbitGuide;
+use Illuminate\Http\Request;
 use NckRtl\Waymaker\Get;
+use Symfony\Component\HttpFoundation\Response;
 
 class HomeController extends Controller
 {
     #[Get(uri: '/')]
-    public function show(): ResponseFactory|Response
+    public function show(Request $request, OrbitGuide $guide): Response
     {
-        return inertia('Home');
+        if ($guide->requestedBy($request)) {
+            return $guide->response();
+        }
+
+        return inertia('Home', ['orbitUrl' => url('/')])->toResponse($request);
     }
 }

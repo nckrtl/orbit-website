@@ -1,7 +1,7 @@
 import { Head } from "@inertiajs/react";
 import { OrbitHomepage } from "@/components/orbit/homepage";
 
-export default function Home() {
+export default function Home({ orbitUrl }: { orbitUrl: string }) {
     return (
         <>
             <Head title="Run your apps on your own infrastructure">
@@ -20,7 +20,7 @@ export default function Home() {
                 />
                 <meta property="og:type" content="website" />
             </Head>
-            <OrbitHomepage />
+            <OrbitHomepage orbitUrl={orbitUrl} />
         </>
     );
 }

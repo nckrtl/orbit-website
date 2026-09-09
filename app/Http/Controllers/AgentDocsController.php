@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Support\OrbitGuide;
 use Illuminate\Http\Response;
 use NckRtl\Waymaker\Get;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -11,11 +12,17 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * Serves plain-text instructions to AI agents that were pointed at this site.
  *
- * `/llms.txt` is the discovery entry point (llmstxt.org); it stays short and links
- * to `/create.md`, which carries the complete setup guide.
+ * `/llms.txt` points to Orbit's getting-started guide. The Launch starter-kit
+ * documents remain available at their existing URLs.
  */
 class AgentDocsController extends Controller
 {
+    #[Get(uri: '/get-started.md')]
+    public function gettingStarted(OrbitGuide $guide): Response
+    {
+        return $guide->response();
+    }
+
     #[Get(uri: '/llms.txt')]
     public function index(): Response
     {

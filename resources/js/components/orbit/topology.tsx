@@ -44,7 +44,6 @@ type OrbitDiagramProps = Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> & {
     onSelect?: (key: string) => void;
     operator?: string | null;
     orbit?: boolean;
-    packetSize?: number;
     packets?: boolean;
     selected?: string | null;
     showCenter?: boolean;
@@ -54,8 +53,10 @@ type OrbitDiagramProps = Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> & {
 };
 
 type Point = { x: number; y: number };
+type Box = { x1: number; y1: number; x2: number; y2: number };
 type PlacedSatellite = OrbitSatellite & Point;
-type PlacedNode = OrbitNode & Point & { index: number; satellites: PlacedSatellite[] };
+type PlacedNode = Omit<OrbitNode, "satellites"> &
+    Point & { index: number; satellites: PlacedSatellite[] };
 
 const width = 520;
 const height = 340;
@@ -159,38 +160,48 @@ function Globe({
     });
 }
 
-function SelectionCore({ selected, radius, x, y }: Point & { radius: number; selected: boolean }) {
-    return selected ? (
-        <circle cx={x} cy={y} r={Math.max(1.5, radius - 2.5)} fill="var(--bone-3)" />
-    ) : null;
-}
-
 function SignalPacket({
     from,
-    packetSize,
     phase,
+    rate = 0.3,
     time,
     to,
 }: {
     from: Point;
-    packetSize: number;
     phase: number;
+    rate?: number;
     time: number;
     to: Point;
 }) {
-    const progress = (time * 0.3 + phase) % 1;
-    const x = from.x + (to.x - from.x) * progress;
-    const y = from.y + (to.y - from.y) * progress;
+    const progress = (time * rate + phase) % 1;
+    const headOpacity = 0.16 + (progress < 0.5 ? progress * 2 : (1 - progress) * 2) * 0.72;
+    const distance = Math.hypot(to.x - from.x, to.y - from.y);
+    const tail = Math.min(0.3, 26 / Math.max(1, distance));
 
-    return (
-        <circle
-            cx={x}
-            cy={y}
-            r={packetSize}
-            fill="var(--bone-3)"
-            opacity={0.35 + Math.sin(progress * Math.PI) * 0.65}
-        />
-    );
+    return Array.from({ length: 14 }, (_, index) => {
+        const start = Math.max(0, progress - (tail * (index + 1)) / 14);
+        const end = Math.max(0, progress - (tail * index) / 14);
+
+        if (end <= 0) {
+            return null;
+        }
+
+        const fade = 1 - index / 14;
+
+        return (
+            <line
+                key={index}
+                x1={from.x + (to.x - from.x) * start}
+                y1={from.y + (to.y - from.y) * start}
+                x2={from.x + (to.x - from.x) * end}
+                y2={from.y + (to.y - from.y) * end}
+                stroke="var(--bone-3)"
+                strokeWidth="1"
+                opacity={headOpacity * fade * fade}
+                vectorEffect="non-scaling-stroke"
+            />
+        );
+    });
 }
 
 function Telemetry({
@@ -198,14 +209,14 @@ function Telemetry({
     label,
     point,
     pulse,
-    side,
+    scale,
     stats,
 }: {
     ip: string;
     label: string;
     point: Point;
     pulse: number;
-    side?: "left" | "right";
+    scale: number;
     stats?: OrbitStats;
 }) {
     const value = hash(label);
@@ -218,19 +229,49 @@ function Telemetry({
         3,
         Math.round((stats?.ping ?? 8 + (value % 42)) + ((value + pulse * 104729) % 7) - 3),
     );
-    const right = side ? side === "right" : point.x < centerX;
-    const x = point.x + (right ? 13 : -13);
-    const anchor = right ? "start" : "end";
+    const x = point.x;
+    const step = 13 / (scale || 1);
+    const baseline = point.y;
 
     return (
         <g pointerEvents="none" className="orbit-telemetry">
-            <text x={x} y={point.y - 9} textAnchor={anchor} className="orbit-diagram-label">
+            <text
+                x={x}
+                y={baseline}
+                fill="var(--text-secondary)"
+                style={{
+                    fontFamily: "var(--font-code)",
+                    fontSize: `${(9 / (scale || 1)).toFixed(2)}px`,
+                    fontWeight: 500,
+                    letterSpacing: "0.03em",
+                }}
+            >
                 {ping}ms
             </text>
-            <text x={x} y={point.y + 3} textAnchor={anchor} className="orbit-diagram-meta">
+            <text
+                x={x}
+                y={baseline + step}
+                fill="var(--text-muted)"
+                style={{
+                    fontFamily: "var(--font-code)",
+                    fontSize: `${(8.5 / (scale || 1)).toFixed(2)}px`,
+                    fontWeight: 400,
+                    letterSpacing: "0.04em",
+                }}
+            >
                 c{cpu} m{memory} d{disk}
             </text>
-            <text x={x} y={point.y + 15} textAnchor={anchor} className="orbit-diagram-meta">
+            <text
+                x={x}
+                y={baseline + step * 2}
+                fill="var(--text-faint)"
+                style={{
+                    fontFamily: "var(--font-code)",
+                    fontSize: `${(8.5 / (scale || 1)).toFixed(2)}px`,
+                    fontWeight: 400,
+                    letterSpacing: "0.04em",
+                }}
+            >
                 {stats?.ip ?? ip}
             </text>
         </g>
@@ -247,7 +288,11 @@ function inStatsZone(point: Point, zone?: number[]) {
         return withinX;
     }
 
-    return withinX && point.y >= zone[2] * height && point.y <= zone[3] * height;
+    return (
+        withinX &&
+        point.y >= 14 + zone[2] * (height - 32) &&
+        point.y <= 14 + zone[3] * (height - 32)
+    );
 }
 
 export function OrbitDiagram({
@@ -259,7 +304,6 @@ export function OrbitDiagram({
     onSelect,
     operator = null,
     orbit = true,
-    packetSize = 1.5,
     packets = true,
     selected = null,
     showCenter = true,
@@ -271,17 +315,61 @@ export function OrbitDiagram({
     const [time, setTime] = useState(0);
     const [pulse, setPulse] = useState(0);
     const reducedMotion = usePrefersReducedMotion();
-    const startTime = useRef<number | null>(null);
+    const elapsed = useRef(0);
+    const wrapper = useRef<HTMLDivElement>(null);
+    const [scale, setScale] = useState(1);
+    const [active, setActive] = useState(false);
 
     useEffect(() => {
-        if (!orbit || reducedMotion) {
+        const element = wrapper.current;
+        if (!element) return;
+        let visible = false;
+        const sync = () => setActive(visible && !document.hidden);
+        const observer = new IntersectionObserver(([entry]) => {
+            visible = entry.isIntersecting;
+            sync();
+        });
+        observer.observe(element);
+        document.addEventListener("visibilitychange", sync);
+        return () => {
+            observer.disconnect();
+            document.removeEventListener("visibilitychange", sync);
+        };
+    }, []);
+
+    useEffect(() => {
+        const element = wrapper.current;
+
+        if (!element || typeof ResizeObserver === "undefined") {
+            return;
+        }
+
+        const observer = new ResizeObserver(() => {
+            const renderedWidth = element.getBoundingClientRect().width;
+
+            if (renderedWidth > 0) {
+                setScale(renderedWidth / width);
+            }
+        });
+
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, []);
+
+    const scaledFontSize = (pixels: number) => `${(pixels / (scale || 1)).toFixed(2)}px`;
+
+    useEffect(() => {
+        if (!orbit || reducedMotion || !active) {
             return;
         }
 
         let frame = 0;
+        let previous: number | null = null;
         const loop = (now: number) => {
-            startTime.current ??= now;
-            setTime((now - startTime.current) / 1000);
+            if (previous !== null) elapsed.current += Math.min(now - previous, 50) / 1000;
+            previous = now;
+            setTime(elapsed.current);
             frame = requestAnimationFrame(loop);
         };
 
@@ -289,18 +377,17 @@ export function OrbitDiagram({
 
         return () => {
             cancelAnimationFrame(frame);
-            startTime.current = null;
         };
-    }, [orbit, reducedMotion]);
+    }, [active, orbit, reducedMotion]);
 
     useEffect(() => {
-        if (!stats || reducedMotion) {
+        if (!stats || reducedMotion || !active) {
             return;
         }
 
         const timer = setInterval(() => setPulse((current) => current + 1), 1000);
         return () => clearInterval(timer);
-    }, [reducedMotion, stats]);
+    }, [active, reducedMotion, stats]);
 
     const placed = useMemo<PlacedNode[]>(
         () =>
@@ -349,9 +436,109 @@ export function OrbitDiagram({
     const centerVisible = showCenter && center !== null;
     const centerPending = centerVisible && center.state === "pending";
     const interactive = Boolean(onSelect);
+    const readouts = new Map<string, Point>();
+
+    if (stats) {
+        // Reserve names before telemetry, in the reference's gateway/node/satellite order.
+        const boxes: Box[] = [];
+        if (labels) {
+            if (centerVisible) {
+                boxes.push({
+                    x1: centerX - 46,
+                    y1: centerY - 32,
+                    x2: centerX + 46,
+                    y2: centerY - 6,
+                });
+            }
+            for (const node of placed) {
+                const right = node.x >= centerX;
+                boxes.push(
+                    node.satellites.length
+                        ? {
+                              x1: node.x - 52,
+                              y1: node.y - satelliteRadiusY - 26,
+                              x2: node.x + 52,
+                              y2: node.y - satelliteRadiusY - 2,
+                          }
+                        : {
+                              x1: right ? node.x + 10 : node.x - 58,
+                              y1: node.y - 9,
+                              x2: right ? node.x + 58 : node.x - 10,
+                              y2: node.y + 18,
+                          },
+                );
+                if (node.cluster) {
+                    boxes.push({
+                        x1: node.x - 52,
+                        y1: node.y + satelliteRadiusY + 12,
+                        x2: node.x + 52,
+                        y2: node.y + satelliteRadiusY + 24,
+                    });
+                }
+                for (const satellite of node.satellites) {
+                    boxes.push({
+                        x1: satellite.x - 26,
+                        y1: satellite.y - 15,
+                        x2: satellite.x + 26,
+                        y2: satellite.y - 4,
+                    });
+                }
+            }
+        }
+        const placeReadout = (
+            key: string,
+            point: Point,
+            gap: number,
+            offset = 0,
+            side?: "left" | "right",
+        ) => {
+            if (!inStatsZone(point, statsZone)) return;
+            const lo = statsZone && statsZone.length >= 2 ? statsZone[0] * width : 6;
+            const hi = statsZone && statsZone.length >= 2 ? statsZone[1] * width : width - 6;
+            const right = side ? side === "right" : point.x + gap + 52 <= hi;
+            const x = Math.max(lo, Math.min(hi - 52, right ? point.x + gap : point.x - gap - 52));
+            const step = 13 / scale;
+            const y = point.y - step + 3.2 / scale + offset;
+            const box = { x1: x - 2, y1: y - step - 3, x2: x + 54, y2: y + step * 2 + 4 };
+            if (
+                boxes.some(
+                    (taken) =>
+                        !(
+                            box.x2 < taken.x1 ||
+                            box.x1 > taken.x2 ||
+                            box.y2 < taken.y1 ||
+                            box.y1 > taken.y2
+                        ),
+                )
+            )
+                return;
+            boxes.push(box);
+            readouts.set(key, { x, y });
+        };
+        if (centerVisible && !centerPending)
+            placeReadout("gateway", { x: centerX, y: centerY }, 15, labels ? 26 : 0);
+        for (const node of placed) {
+            placeReadout(
+                `node:${node.label}`,
+                node,
+                13,
+                0,
+                labels && !node.satellites.length
+                    ? node.x >= centerX
+                        ? "left"
+                        : "right"
+                    : undefined,
+            );
+        }
+        for (const node of placed) {
+            for (const satellite of node.satellites) {
+                placeReadout(`sat:${node.label}/${satellite.label}`, satellite, 9, labels ? 10 : 0);
+            }
+        }
+    }
 
     return (
-        <div className={`w-full ${className}`} {...props}>
+        <div ref={wrapper} className={`w-full ${className}`} {...props}>
             <svg
                 viewBox="0 14 520 308"
                 width="100%"
@@ -381,17 +568,17 @@ export function OrbitDiagram({
                             y1="38"
                             x2={centerX - 16}
                             y2={centerY - 8}
-                            className="orbit-flow"
                             stroke="var(--line-default)"
                             strokeWidth="1"
+                            strokeDasharray="2 4"
                             vectorEffect="non-scaling-stroke"
                         />
                         {packets && !reducedMotion && !centerPending ? (
                             <SignalPacket
                                 from={{ x: 36, y: 38 }}
                                 to={{ x: centerX - 16, y: centerY - 8 }}
-                                packetSize={packetSize}
                                 phase={0.1}
+                                rate={0.24}
                                 time={time}
                             />
                         ) : null}
@@ -416,12 +603,28 @@ export function OrbitDiagram({
                                 fill="none"
                                 stroke={selected === "operator" ? "var(--bone-3)" : "var(--bone-1)"}
                                 strokeWidth="1.2"
+                                vectorEffect="non-scaling-stroke"
                             />
                             {selected === "operator" ? (
                                 <rect x="27" y="29" width="6" height="6" fill="var(--bone-3)" />
                             ) : null}
                             {labels ? (
-                                <text x="44" y="35" className="orbit-diagram-label">
+                                <text
+                                    x="44"
+                                    y="32"
+                                    dominantBaseline="central"
+                                    fill={
+                                        selected === "operator"
+                                            ? "var(--text-primary)"
+                                            : "var(--text-muted)"
+                                    }
+                                    style={{
+                                        fontFamily: "var(--font-code)",
+                                        fontSize: scaledFontSize(9.5),
+                                        fontWeight: 500,
+                                        letterSpacing: "0.14em",
+                                    }}
+                                >
                                     {operator.toUpperCase()}
                                 </text>
                             ) : null}
@@ -441,16 +644,15 @@ export function OrbitDiagram({
                                 y1={centerY}
                                 x2={node.x}
                                 y2={node.y}
-                                className="orbit-flow"
                                 stroke="var(--line-default)"
                                 strokeWidth="1"
+                                strokeDasharray="2 4"
                                 vectorEffect="non-scaling-stroke"
                             />
                             {packets && !reducedMotion ? (
                                 <SignalPacket
                                     from={{ x: centerX, y: centerY }}
                                     to={nodePoint}
-                                    packetSize={packetSize}
                                     phase={(node.index * 0.37) % 1}
                                     time={time}
                                 />
@@ -496,18 +698,18 @@ export function OrbitDiagram({
                                             y1={node.y}
                                             x2={satellite.x}
                                             y2={satellite.y}
-                                            className="orbit-flow"
                                             stroke="var(--line-default)"
                                             strokeWidth="1"
+                                            strokeDasharray="2 4"
                                             vectorEffect="non-scaling-stroke"
                                         />
                                         {packets && !reducedMotion ? (
                                             <SignalPacket
                                                 from={nodePoint}
                                                 to={satellitePoint}
-                                                packetSize={packetSize}
                                                 phase={(index * 0.4) % 1}
-                                                time={time * 1.4}
+                                                rate={0.5}
+                                                time={time}
                                             />
                                         ) : null}
                                         <circle
@@ -517,6 +719,7 @@ export function OrbitDiagram({
                                             fill="transparent"
                                         />
                                         <circle
+                                            data-orbit-planet=""
                                             cx={satellite.x}
                                             cy={satellite.y}
                                             r="4.4"
@@ -527,6 +730,7 @@ export function OrbitDiagram({
                                                     : "var(--bone-1)"
                                             }
                                             strokeWidth="1"
+                                            vectorEffect="non-scaling-stroke"
                                         />
                                         <Globe
                                             x={satellite.x}
@@ -536,27 +740,28 @@ export function OrbitDiagram({
                                             seed={index * 2.1 + 0.7}
                                             time={reducedMotion ? 0 : time}
                                         />
-                                        <SelectionCore
-                                            x={satellite.x}
-                                            y={satellite.y}
-                                            radius={4.4}
-                                            selected={selected === satelliteKey}
-                                        />
                                         {labels ? (
                                             <text
                                                 x={satellite.x}
                                                 y={satellite.y - 9}
                                                 textAnchor="middle"
-                                                className="orbit-diagram-meta"
+                                                fill="var(--text-muted)"
+                                                style={{
+                                                    fontFamily: "var(--font-code)",
+                                                    fontSize: scaledFontSize(9.5),
+                                                    fontWeight: 400,
+                                                    letterSpacing: "0.12em",
+                                                }}
                                             >
                                                 {(satellite.role || satellite.label).toUpperCase()}
                                             </text>
                                         ) : null}
-                                        {stats && inStatsZone(satellitePoint, statsZone) ? (
+                                        {readouts.has(satelliteKey) ? (
                                             <Telemetry
                                                 label={`${node.label}/${satellite.label}`}
-                                                point={satellitePoint}
+                                                point={readouts.get(satelliteKey) ?? satellitePoint}
                                                 pulse={pulse}
+                                                scale={scale}
                                                 stats={satellite.stats}
                                                 ip={
                                                     addresses.get(
@@ -582,6 +787,7 @@ export function OrbitDiagram({
                             >
                                 <circle cx={node.x} cy={node.y} r="15" fill="transparent" />
                                 <circle
+                                    data-orbit-planet=""
                                     cx={node.x}
                                     cy={node.y}
                                     r={nodeRadius}
@@ -596,6 +802,7 @@ export function OrbitDiagram({
                                                 : "var(--bone-1)"
                                     }
                                     strokeWidth="1"
+                                    vectorEffect="non-scaling-stroke"
                                 />
                                 <Globe
                                     x={node.x}
@@ -605,12 +812,6 @@ export function OrbitDiagram({
                                     seed={node.index * 1.3}
                                     time={reducedMotion ? 0 : time}
                                 />
-                                <SelectionCore
-                                    x={node.x}
-                                    y={node.y}
-                                    radius={nodeRadius}
-                                    selected={selected === nodeKey}
-                                />
                             </g>
                             {labels ? (
                                 node.satellites.length ? (
@@ -619,7 +820,13 @@ export function OrbitDiagram({
                                             x={node.x}
                                             y={node.y - satelliteRadiusY - 20}
                                             textAnchor="middle"
-                                            className="orbit-diagram-label"
+                                            fill="var(--text-secondary)"
+                                            style={{
+                                                fontFamily: "var(--font-code)",
+                                                fontSize: scaledFontSize(11),
+                                                fontWeight: 500,
+                                                letterSpacing: "0.05em",
+                                            }}
                                         >
                                             {node.label}
                                         </text>
@@ -628,7 +835,13 @@ export function OrbitDiagram({
                                                 x={node.x}
                                                 y={node.y - satelliteRadiusY - 8}
                                                 textAnchor="middle"
-                                                className="orbit-diagram-meta"
+                                                fill="var(--text-muted)"
+                                                style={{
+                                                    fontFamily: "var(--font-code)",
+                                                    fontSize: scaledFontSize(9.5),
+                                                    fontWeight: 400,
+                                                    letterSpacing: "0.14em",
+                                                }}
                                             >
                                                 {node.role.toUpperCase()}
                                             </text>
@@ -640,7 +853,13 @@ export function OrbitDiagram({
                                             x={node.x + (node.x >= centerX ? 12 : -12)}
                                             y={node.y + 1}
                                             textAnchor={node.x >= centerX ? "start" : "end"}
-                                            className="orbit-diagram-label"
+                                            fill="var(--text-secondary)"
+                                            style={{
+                                                fontFamily: "var(--font-code)",
+                                                fontSize: scaledFontSize(11),
+                                                fontWeight: 500,
+                                                letterSpacing: "0.05em",
+                                            }}
                                         >
                                             {node.label}
                                         </text>
@@ -649,7 +868,13 @@ export function OrbitDiagram({
                                                 x={node.x + (node.x >= centerX ? 12 : -12)}
                                                 y={node.y + 14}
                                                 textAnchor={node.x >= centerX ? "start" : "end"}
-                                                className="orbit-diagram-meta"
+                                                fill="var(--text-muted)"
+                                                style={{
+                                                    fontFamily: "var(--font-code)",
+                                                    fontSize: scaledFontSize(9.5),
+                                                    fontWeight: 400,
+                                                    letterSpacing: "0.14em",
+                                                }}
                                             >
                                                 {node.role.toUpperCase()}
                                             </text>
@@ -662,25 +887,25 @@ export function OrbitDiagram({
                                     x={node.x}
                                     y={node.y + satelliteRadiusY + 20}
                                     textAnchor="middle"
-                                    className="orbit-diagram-meta"
+                                    fill="var(--text-muted)"
+                                    style={{
+                                        fontFamily: "var(--font-code)",
+                                        fontSize: scaledFontSize(9.5),
+                                        fontWeight: 500,
+                                        letterSpacing: "0.14em",
+                                    }}
                                 >
                                     {node.cluster.toUpperCase()}
                                 </text>
                             ) : null}
-                            {stats && inStatsZone(nodePoint, statsZone) ? (
+                            {readouts.has(nodeKey) ? (
                                 <Telemetry
                                     label={node.label}
-                                    point={nodePoint}
+                                    point={readouts.get(nodeKey) ?? nodePoint}
                                     pulse={pulse}
+                                    scale={scale}
                                     stats={node.stats}
                                     ip={addresses.get(node.label) ?? "10.1.0.2"}
-                                    side={
-                                        labels && !node.satellites.length
-                                            ? node.x >= centerX
-                                                ? "left"
-                                                : "right"
-                                            : undefined
-                                    }
                                 />
                             ) : null}
                         </g>
@@ -702,6 +927,7 @@ export function OrbitDiagram({
                     >
                         <circle cx={centerX} cy={centerY} r="17" fill="transparent" />
                         <circle
+                            data-orbit-planet=""
                             cx={centerX}
                             cy={centerY}
                             r="9.5"
@@ -714,6 +940,7 @@ export function OrbitDiagram({
                                       : "var(--bone-1)"
                             }
                             strokeWidth="1"
+                            vectorEffect="non-scaling-stroke"
                             strokeDasharray={centerPending ? "3 4" : undefined}
                         />
                         {centerPending ? null : (
@@ -726,21 +953,14 @@ export function OrbitDiagram({
                                     seed={0}
                                     time={reducedMotion ? 0 : time}
                                 />
-                                <SelectionCore
-                                    x={centerX}
-                                    y={centerY}
-                                    radius={9.5}
-                                    selected={selected === "gateway"}
-                                />
                             </>
                         )}
-                        {stats &&
-                        !centerPending &&
-                        inStatsZone({ x: centerX, y: centerY }, statsZone) ? (
+                        {readouts.has("gateway") ? (
                             <Telemetry
                                 label={center.label || "gateway"}
-                                point={{ x: centerX, y: centerY + (labels ? 26 : 0) }}
+                                point={readouts.get("gateway") ?? { x: centerX, y: centerY }}
                                 pulse={pulse}
+                                scale={scale}
                                 stats={center.stats}
                                 ip="10.1.0.1"
                             />
@@ -753,7 +973,13 @@ export function OrbitDiagram({
                             x={centerX}
                             y={centerY - 26}
                             textAnchor="middle"
-                            className="orbit-diagram-title"
+                            fill={centerPending ? "var(--text-muted)" : "var(--text-primary)"}
+                            style={{
+                                fontFamily: "var(--font-code)",
+                                fontSize: scaledFontSize(12),
+                                fontWeight: 500,
+                                letterSpacing: "0.06em",
+                            }}
                         >
                             {center.label}
                         </text>
@@ -762,7 +988,13 @@ export function OrbitDiagram({
                                 x={centerX}
                                 y={centerY - 13}
                                 textAnchor="middle"
-                                className="orbit-diagram-meta"
+                                fill="var(--text-muted)"
+                                style={{
+                                    fontFamily: "var(--font-code)",
+                                    fontSize: scaledFontSize(9.5),
+                                    fontWeight: 400,
+                                    letterSpacing: "0.14em",
+                                }}
                             >
                                 {center.sub.toUpperCase()}
                             </text>

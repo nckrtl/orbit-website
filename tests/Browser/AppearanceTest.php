@@ -1,25 +1,18 @@
 <?php
 
-it('lets readers reshape the topology with role chips', function () {
+it('shows the default story network without topology controls', function () {
     $page = visit('/');
 
-    $page->assertAttribute('[data-role-chip="database"]', 'aria-pressed', 'true')
-        ->assertAttribute('[data-role-chip="dedicatedDatabase"]', 'aria-pressed', 'false')
-        ->click('[data-role-chip="dedicatedDatabase"]')
-        ->assertAttribute('[data-role-chip="dedicatedDatabase"]', 'aria-pressed', 'true')
-        ->assertSee('db-01')
-        ->click('[data-role-chip="production"]')
-        ->assertAttribute('[data-role-chip="production"]', 'aria-pressed', 'true')
-        ->assertSee('prod-01')
-        ->assertNoJavaScriptErrors();
+    $page->assertScript('document.querySelectorAll("[aria-label=\"Topology roles\"], [data-role-chip]").length', 0)
+        ->assertScript('document.querySelectorAll("[data-story-node=dev-01], [data-story-node=worker-01], [data-story-node=dev-02], [data-story-node=database]").length', 4)
+        ->assertNoJavaScriptErrors()
+        ->assertNoConsoleLogs();
 });
 
-it('supports keyboard role activation and command copying', function () {
+it('supports keyboard URL copying', function () {
     $page = visit('/');
 
-    $page->keys('[data-role-chip="production"]', 'Enter')
-        ->assertAttribute('[data-role-chip="production"]', 'aria-pressed', 'true')
-        ->click('#install [aria-label^="Copy composer global require"]')
+    $page->keys('[aria-label="Copy Orbit URL"]', 'Enter')
         ->assertSee('Copied')
         ->assertNoJavaScriptErrors();
 });

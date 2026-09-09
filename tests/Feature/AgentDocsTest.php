@@ -8,21 +8,17 @@ it('serves llms.txt as plain text', function () {
 
 it('points agents from llms.txt to the full setup guide', function () {
     expect($this->get('/llms.txt')->getContent())
-        ->toContain('https://launch.nckrtl.com/create.md');
+        ->toContain('/get-started.md');
 });
 
-it('lists every local environment addendum in llms.txt', function () {
+it('introduces Orbit instead of the starter kit in agent discovery', function () {
     expect($this->get('/llms.txt')->getContent())
-        ->toContain('https://launch.nckrtl.com/herd.md')
-        ->toContain('https://launch.nckrtl.com/orbit.md')
-        ->toContain('https://launch.nckrtl.com/solo.md');
+        ->toStartWith('# Orbit')
+        ->toContain('https://github.com/nckrtl/orbit')
+        ->not->toContain('launch.nckrtl.com');
 });
 
-it('links the conventions document from llms.txt and the end of setup', function () {
-    expect($this->get('/llms.txt')->getContent())
-        ->toContain('https://launch.nckrtl.com/conventions.md');
-
-    // An agent that only fetches create.md must still be told where the rules are.
+it('keeps the conventions linked from the legacy starter-kit setup guide', function () {
     expect($this->get('/create.md')->getContent())
         ->toContain('https://launch.nckrtl.com/conventions.md');
 });
@@ -181,5 +177,5 @@ it('does not send agents to the non-existent orbit link command', function () {
 it('advertises the setup guide to agents from the homepage head', function () {
     $this->get('/')
         ->assertSuccessful()
-        ->assertSee('rel="alternate" type="text/markdown" href="/create.md"', escape: false);
+        ->assertSee('rel="alternate" type="text/markdown" href="/get-started.md"', escape: false);
 });

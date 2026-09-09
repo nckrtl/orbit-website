@@ -24,13 +24,13 @@ it('renders the story homepage selected from the Orbit design system', function 
         ->toBeString()
         ->toContain('Develop your ideas faster on your own agent-run infra.')
         ->toContain('Local development stops when your laptop does.')
-        ->toContain('Move the work off your machine. Keep the control on it.')
-        ->toContain('One service holding the store, the network, and the names.')
-        ->toContain('Roles are the building blocks. Assemble what you need.')
-        ->toContain('Codified operations, so the agent stops guessing.')
-        ->toContain('That machine in the closet is a node.')
-        ->toContain('One install, then tell your agent.')
-        ->toContain('data-hero-constellation');
+        ->toContain('Move the work. Keep the control.')
+        ->toContain('Start with one machine. Make room for what’s next.')
+        ->toContain('<Capabilities />')
+        ->toContain('<DevelopmentEnvironments />')
+        ->toContain('A steady core. An open fleet.')
+        ->toContain('<Install orbitUrl={orbitUrl} />')
+        ->toContain('<HeroConstellations />');
 });
 
 it('keeps Agentation local when no sync server is configured', function () {

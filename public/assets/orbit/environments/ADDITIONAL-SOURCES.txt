@@ -1,0 +1,5 @@
+Brand assets used to identify their respective development environments:
+Polyscope: https://getpolyscope.com/favicon.svg
+T3: https://t3.codes/favicon-32x32.png
+Conductor: https://www.conductor.build/icon.png
+Retrieved 2026-09-09. Brand marks belong to their respective owners.

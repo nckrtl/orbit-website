@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, CSSProperties, HTMLAttributes, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, HTMLAttributes, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const assetRoot = "/assets/orbit";
@@ -49,7 +49,19 @@ export function ButtonLink({
     );
 }
 
-export function Snippet({ command, className = "" }: { command: string; className?: string }) {
+export function CopyButton({
+    command,
+    label = "Copy",
+    ariaLabel = `Copy ${command}`,
+    className = "",
+    variant = "compact",
+}: {
+    command: string;
+    label?: string;
+    ariaLabel?: string;
+    className?: string;
+    variant?: "compact" | "outline" | "solid";
+}) {
     const [copied, setCopied] = useState(false);
     const mounted = useRef(false);
     const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,12 +94,14 @@ export function Snippet({ command, className = "" }: { command: string; classNam
         }
 
         if (!succeeded) {
+            const focused = document.activeElement;
             const textarea = document.createElement("textarea");
             textarea.value = command;
             textarea.setAttribute("readonly", "");
             textarea.style.position = "fixed";
             textarea.style.opacity = "0";
-            document.body.append(textarea);
+            const copyRoot = focused instanceof Element ? focused.closest('[role="dialog"]') : null;
+            (copyRoot ?? document.body).append(textarea);
             try {
                 textarea.select();
                 succeeded = document.execCommand("copy");
@@ -95,6 +109,7 @@ export function Snippet({ command, className = "" }: { command: string; classNam
                 succeeded = false;
             } finally {
                 textarea.remove();
+                if (focused instanceof HTMLElement) focused.focus({ preventScroll: true });
             }
         }
 
@@ -113,6 +128,23 @@ export function Snippet({ command, className = "" }: { command: string; classNam
     };
 
     return (
+        <button
+            type="button"
+            onClick={copy}
+            aria-label={ariaLabel}
+            className={`${
+                variant !== "compact"
+                    ? `orbit-button orbit-button--${variant} orbit-button--lg`
+                    : "rounded-[2px] px-2 py-1.5 font-mono text-[10.5px] font-medium tracking-[0.16em] text-orbit-muted uppercase transition-colors hover:bg-orbit-ink-04 hover:text-orbit-primary"
+            } ${className}`}
+        >
+            <span aria-live="polite">{copied ? "Copied" : label}</span>
+        </button>
+    );
+}
+
+export function Snippet({ command, className = "" }: { command: string; className?: string }) {
+    return (
         <div
             className={`flex h-10 items-center gap-3 rounded-[2px] border border-orbit-line bg-black pr-2 pl-4 ${className}`}
         >
@@ -120,14 +152,7 @@ export function Snippet({ command, className = "" }: { command: string; classNam
                 <span className="text-orbit-faint select-none">$ </span>
                 {command}
             </code>
-            <button
-                type="button"
-                onClick={copy}
-                aria-label={`Copy ${command}`}
-                className="rounded-[2px] px-2 py-1.5 font-mono text-[10.5px] font-medium tracking-[0.16em] text-orbit-muted uppercase transition-colors hover:bg-orbit-ink-04 hover:text-orbit-primary"
-            >
-                {copied ? "Copied" : "Copy"}
-            </button>
+            <CopyButton command={command} />
         </div>
     );
 }
@@ -148,13 +173,9 @@ type StarfieldProps = HTMLAttributes<HTMLDivElement> & {
     grid?: boolean;
     horizon?: boolean;
     scanlines?: boolean;
+    scrollRotate?: boolean;
     seed?: number;
     twinkle?: boolean;
-};
-
-type StarStyle = CSSProperties & {
-    "--orbit-star-min": number;
-    "--orbit-star-max": number;
 };
 
 export function Starfield({
@@ -164,11 +185,13 @@ export function Starfield({
     grid = false,
     horizon = false,
     scanlines = false,
+    scrollRotate = false,
     seed = 7,
     twinkle = true,
     className = "",
     ...props
 }: StarfieldProps) {
+    const starsRef = useRef<HTMLDivElement>(null);
     const stars = useMemo(() => {
         const random = seeded(seed * 9301 + 49297);
         const count = Math.round(90 * density);
@@ -188,29 +211,98 @@ export function Starfield({
         });
     }, [density, seed]);
 
+    useEffect(() => {
+        const container = starsRef.current;
+        if (!container || !twinkle) return;
+        const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const easing = getComputedStyle(container).getPropertyValue("--ease-standard").trim();
+        const mobile = window.matchMedia("(max-width: 639px)");
+        const compact = window.matchMedia("(max-width: 1023px)");
+        const elements = Array.from(container.children);
+        const indices = new Map(elements.map((element, index) => [element, index]));
+        const animations = new Map<Element, Animation>();
+        const visibleStars = new Set<Element>();
+        const syncStar = (element: Element) => {
+            const index = indices.get(element)!;
+            const stride = mobile.matches ? 3 : compact.matches ? 2 : 1;
+            const running =
+                visibleStars.has(element) &&
+                index % stride === 0 &&
+                !motion.matches &&
+                !document.hidden;
+            if (!running) {
+                animations.get(element)?.cancel();
+                animations.delete(element);
+                return;
+            }
+            if (animations.has(element)) return;
+            const star = stars[index];
+            // Allocate compositor animations only for visible twinkles. The
+            // remaining stars retain their static appearance on every viewport.
+            animations.set(
+                element,
+                element.animate(
+                    [
+                        { opacity: star.minimumOpacity },
+                        { opacity: star.maximumOpacity },
+                        { opacity: star.minimumOpacity },
+                    ],
+                    {
+                        duration: Number(star.duration) * 1000,
+                        delay: Number(star.delay) * 1000,
+                        easing,
+                        iterations: Infinity,
+                    },
+                ),
+            );
+        };
+        const sync = () => {
+            for (const element of animations.keys()) syncStar(element);
+            visibleStars.forEach(syncStar);
+        };
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) visibleStars.add(entry.target);
+                    else visibleStars.delete(entry.target);
+                    syncStar(entry.target);
+                });
+            },
+            { rootMargin: "32px" },
+        );
+        elements.forEach((star) => observer.observe(star));
+        motion.addEventListener("change", sync);
+        mobile.addEventListener("change", sync);
+        compact.addEventListener("change", sync);
+        document.addEventListener("visibilitychange", sync);
+        return () => {
+            observer.disconnect();
+            motion.removeEventListener("change", sync);
+            mobile.removeEventListener("change", sync);
+            compact.removeEventListener("change", sync);
+            document.removeEventListener("visibilitychange", sync);
+            animations.forEach((animation) => animation.cancel());
+        };
+    }, [stars, twinkle]);
+
     return (
         <div
-            className={`orbit-starfield ${fill ? "orbit-starfield--fill" : ""} ${grid ? "orbit-starfield--grid" : ""} ${horizon ? "orbit-starfield--horizon" : ""} ${scanlines ? "orbit-starfield--scanlines" : ""} ${className}`}
+            className={`orbit-starfield ${fill ? "orbit-starfield--fill" : ""} ${grid ? "orbit-starfield--grid" : ""} ${horizon ? "orbit-starfield--horizon" : ""} ${scanlines ? "orbit-starfield--scanlines" : ""} ${scrollRotate ? "orbit-starfield--scroll" : ""} ${className}`}
+            data-scroll-stars={scrollRotate ? "" : undefined}
             {...props}
         >
-            <div className="orbit-starfield__stars" aria-hidden="true">
+            <div ref={starsRef} className="orbit-starfield__stars" aria-hidden="true">
                 {stars.map((star, index) => (
                     <span
                         key={index}
                         className={twinkle ? "orbit-star orbit-star--twinkle" : "orbit-star"}
-                        style={
-                            {
-                                "--orbit-star-max": star.maximumOpacity,
-                                "--orbit-star-min": star.minimumOpacity,
-                                animationDelay: `${star.delay}s`,
-                                animationDuration: `${star.duration}s`,
-                                height: star.size,
-                                left: `${star.x}%`,
-                                opacity: star.minimumOpacity,
-                                top: `${star.y}%`,
-                                width: star.size,
-                            } as StarStyle
-                        }
+                        style={{
+                            height: star.size,
+                            left: `${star.x}%`,
+                            opacity: star.minimumOpacity,
+                            top: `${star.y}%`,
+                            width: star.size,
+                        }}
                     />
                 ))}
             </div>

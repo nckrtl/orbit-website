@@ -1,38 +1,36 @@
 import type { RefObject } from "react";
-import { useEffect, useRef, useState } from "react";
-import {
-    ButtonLink,
-    Icon,
-    Logo,
-    Snippet,
-    Starfield,
-    Terminal,
-    type TerminalLine,
-} from "./primitives";
-import { OrbitDiagram, type OrbitNode } from "./topology";
+import { useEffect, useRef } from "react";
+import { ButtonLink, Logo, Starfield } from "./primitives";
+import { Install } from "./install";
+import { Laptop } from "./laptop";
+import { PremiseScene, StoryHandoff, TopologyScene, type StoryRoles } from "./story-handoff";
+import { Capabilities } from "./capabilities";
+import { OwnedInfrastructure } from "./owned-infrastructure";
+import { CoreFunnel } from "./core-funnel";
+import { DevelopmentEnvironments } from "./development-environments";
+import { HeroConstellations } from "./hero-constellation";
+import { useHeroScroll } from "./hero-scroll";
+import { useStoryCopyScroll } from "./story-copy-scroll";
 
 const githubUrl = "https://github.com/nckrtl/orbit";
+// Set to true to restore the intro's clipped constellation and ticked divider.
+const showIntroDivider = false;
 
 type Chapter = {
     aside?: string;
     body: string;
     caption: string;
-    center?: { label: string; state?: "pending"; sub?: string };
-    command?: { lines: TerminalLine[]; title: string };
     id: string;
     kicker: string;
-    nodes?: OrbitNode[];
-    operator?: string;
-    selected?: string;
     step: string;
     title: string;
-    type: "diagram" | "laptop" | "topology";
+    type: "laptop" | "topology" | "handoff";
 };
 
-type RoleState = {
-    database: boolean;
-    dedicatedDatabase: boolean;
-    production: boolean;
+const storyRoles: StoryRoles = {
+    database: true,
+    dedicatedDatabase: false,
+    production: true,
 };
 
 const chapters: Chapter[] = [
@@ -50,188 +48,23 @@ const chapters: Chapter[] = [
         id: "premise",
         step: "02",
         kicker: "The premise",
-        title: "Move the work off your machine. Keep the control on it.",
-        body: "Could I manage every machine from my own laptop, without the workload running on it, and still reach every project from anywhere I happen to be? That question is the whole of Orbit. The answer needed a record of what exists, a private network to reach it, and names that resolve inside that network.",
-        center: { label: "Gateway", state: "pending" },
-        operator: "you + agent",
+        title: "Move the work. Keep the control.",
+        body: "Let an always-on machine run the agents, the queues, and the projects. Your laptop is where you direct the work, not where it has to live. Close the lid: everything keeps running, and the same project is still there on your phone or tablet.",
+        aside: "Your machine. Your network. Your rules. Orbit connects the pieces — a record of what exists, a private network to reach it, and names that resolve inside it.",
         caption: "control here · workload elsewhere",
-        nodes: [],
-        selected: "operator",
-        type: "diagram",
-    },
-    {
-        id: "gateway",
-        step: "03",
-        kicker: "The Gateway",
-        title: "One service holding the store, the network, and the names.",
-        body: "The Gateway is three roles in one: the store that records every machine, app, and route; a WireGuard layer that issues an identity to each node; and a DNS server that answers for your development TLD. Together they turn a pile of machines into one network you can address.",
-        command: {
-            title: "orbit · gateway",
-            lines: [
-                { kind: "command", text: "orbit gateway:add home" },
-                { kind: "info", text: "Gateway [home] is active." },
-                { kind: "out", text: "WireGuard: 10.88.0.1" },
-                { kind: "out", text: "TLD: orbit.test" },
-                { kind: "comment", text: "Request ID: 01J9K2QP3F7Y" },
-            ],
-        },
-        center: { label: "Gateway" },
-        operator: "you + agent",
-        caption: "the gateway is the network, not just a database",
-        nodes: [],
-        selected: "gateway",
-        type: "diagram",
-    },
-    {
-        id: "nodes",
-        step: "04",
-        kicker: "Nodes",
-        title: "Provisioning you did not have to write.",
-        body: "Point Orbit at a machine and it installs what the roles need, joins it to the private network with its own WireGuard identity, and remembers exactly what it put there. Because provisioning is codified, every node comes up the same way — and an agent debugging one has context instead of a blank prompt.",
-        command: {
-            title: "orbit · node:provision",
-            lines: [
-                { kind: "command", text: "orbit node:provision dev-01 --role app-dev" },
-                { kind: "out", text: "wireguard  identity issued    ok" },
-                { kind: "out", text: "php 8.5    installed          ok" },
-                { kind: "out", text: "nginx      configured         ok" },
-                { kind: "info", text: "Node [dev-01] is ready." },
-            ],
-        },
-        center: { label: "Gateway" },
-        operator: "you + agent",
-        caption: "one node, provisioned the same way every time",
-        nodes: [{ label: "dev-01", role: "app-dev", angle: -15 }],
-        selected: "node:dev-01",
-        type: "diagram",
-    },
-    {
-        id: "access",
-        step: "05",
-        kicker: "Access",
-        title: "Every project has a URL that works on every device.",
-        body: "Place an app on the node and it gets a hostname on your development TLD, a runtime picked from its own source, and its processes kept alive. Any device joined to the network opens the same address — laptop, tablet, phone, or the machine you borrowed at a conference.",
-        aside: "Nothing here is public. The network is the boundary.",
-        center: { label: "Gateway" },
-        operator: "you + agent",
-        caption: "app instances orbit their node",
-        nodes: [
-            {
-                label: "dev-01",
-                role: "app-dev",
-                angle: -15,
-                satellites: [
-                    { label: "app-1", role: "app-1", angle: 10 },
-                    { label: "app-2", role: "app-2", angle: 190 },
-                ],
-            },
-        ],
-        selected: "sat:dev-01/app-1",
-        type: "diagram",
+        type: "handoff",
     },
     {
         id: "topology",
-        step: "06",
-        kicker: "Your topology",
-        title: "Roles are the building blocks. Assemble what you need.",
-        body: "A database beside your apps, or on a machine of its own. A production node when you want something published. Add and remove roles until the shape fits how you work — the commands do not change as the topology grows.",
-        center: { label: "Gateway" },
-        operator: "you + agent",
-        caption: "add roles and watch the network take shape",
+        step: "03",
+        kicker: "Room to grow",
+        title: "Start with one machine. Make room for what’s next.",
+        body: "Give background work a node of its own. Keep a database beside your apps, or move it to a dedicated machine. When you need production, bring related nodes together in a cluster.",
+        aside: "The shape can change. Your Gateway remains the same point of control.",
+        caption: "more nodes · the same network",
         type: "topology",
     },
 ];
-
-const heroNodes: OrbitNode[] = [
-    {
-        label: "h1",
-        role: "",
-        angle: 8,
-        cluster: " ",
-        satellites: [
-            { label: "h1a", role: "", angle: 20 },
-            { label: "h1b", role: "", angle: 200 },
-        ],
-    },
-    { label: "h2", role: "", angle: 96, ring: 2 },
-    {
-        label: "h3",
-        role: "",
-        angle: 158,
-        cluster: " ",
-        satellites: [
-            { label: "h3a", role: "", angle: 40 },
-            { label: "h3b", role: "", angle: 220 },
-        ],
-    },
-    {
-        label: "h4",
-        role: "",
-        angle: 250,
-        ring: 2,
-        satellites: [{ label: "h4a", role: "", angle: 0 }],
-    },
-];
-
-const agentLines: TerminalLine[] = [
-    { kind: "agent", text: "# agent: the queue on app-1 looks stuck" },
-    { kind: "command", text: "orbit process:list --instance 12" },
-    { kind: "out", text: "| 31 | queue | php artisan queue:work | running | always |" },
-    { kind: "command", text: "orbit process:logs 31 --lines 20" },
-    { kind: "out", text: "[2026-09-07 11:02:14] redis connection refused" },
-    { kind: "command", text: "orbit doctor --node 2 --family tool" },
-    { kind: "warn", text: "| dev-01 | tool | drift | 4 | tool.service_stopped: redis |" },
-    { kind: "command", text: "orbit tool:action redis restart" },
-    { kind: "info", text: "Tool [redis] is running." },
-    { kind: "comment", text: "Request ID: 01J9K2QN7X4B" },
-];
-
-function useLaptopPhase() {
-    const [phase, setPhase] = useState<"closed" | "dim" | "run">("run");
-
-    useEffect(() => {
-        const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-        let freezeTimer: ReturnType<typeof setTimeout> | null = null;
-        let dimTimer: ReturnType<typeof setTimeout> | null = null;
-        let cycleTimer: ReturnType<typeof setTimeout> | null = null;
-
-        const clear = () => {
-            if (freezeTimer) clearTimeout(freezeTimer);
-            if (dimTimer) clearTimeout(dimTimer);
-            if (cycleTimer) clearTimeout(cycleTimer);
-            freezeTimer = null;
-            dimTimer = null;
-            cycleTimer = null;
-        };
-
-        const cycle = () => {
-            clear();
-            setPhase("run");
-            freezeTimer = setTimeout(() => setPhase("closed"), 4200);
-            dimTimer = setTimeout(() => setPhase("dim"), 4900);
-            cycleTimer = setTimeout(cycle, 7400);
-        };
-
-        const sync = () => {
-            clear();
-            if (query.matches) {
-                setPhase("run");
-                return;
-            }
-            cycle();
-        };
-
-        sync();
-        query.addEventListener("change", sync);
-
-        return () => {
-            query.removeEventListener("change", sync);
-            clear();
-        };
-    }, []);
-
-    return phase;
-}
 
 function usePageMotion(
     headerWash: RefObject<HTMLDivElement | null>,
@@ -242,10 +75,29 @@ function usePageMotion(
         const query = window.matchMedia("(prefers-reduced-motion: reduce)");
         let frame = 0;
         let settleTimer: ReturnType<typeof setTimeout> | null = null;
+        const starfield = document.querySelector<HTMLElement>("[data-page-stars]");
+        const dividerMarks = document.querySelectorAll<HTMLElement>(
+            "[data-story-divider] .orbit-story-ruler__marks, [data-story-divider] .orbit-story-hatch",
+        );
+        let needsMeasure = true;
+        let scrollRange = 1;
 
         const paint = () => {
             frame = 0;
             const scrollY = window.scrollY || 0;
+            // Layout and overscan only change on resize, never on scroll.
+            if (needsMeasure) {
+                const bounds = starfield?.getBoundingClientRect();
+                scrollRange = Math.max(
+                    1,
+                    document.documentElement.scrollHeight - window.innerHeight,
+                );
+                if (starfield && bounds) {
+                    starfield.style.setProperty("--starfield-pad-x", `${bounds.height * 0.08}px`);
+                    starfield.style.setProperty("--starfield-pad-y", `${bounds.width * 0.08}px`);
+                }
+                needsMeasure = false;
+            }
             if (headerWash.current) {
                 headerWash.current.style.opacity = scrollY > 4 ? "1" : "0";
             }
@@ -257,6 +109,16 @@ function usePageMotion(
             if (secondRuler.current) {
                 secondRuler.current.style.backgroundPosition = `${offset}px 0, ${offset}px 0`;
             }
+            dividerMarks.forEach((marks) => {
+                marks.style.backgroundPositionX = `${offset}px, ${offset}px`;
+            });
+            if (starfield) {
+                // One continuous star plane and one scroll angle for the whole
+                // page, including the transition from the intro to the story.
+                const progress = Math.max(0, Math.min(1, scrollY / scrollRange));
+                const angle = query.matches ? 0 : progress * 6;
+                starfield.style.setProperty("--starfield-rotation", `${angle}deg`);
+            }
         };
 
         const schedule = () => {
@@ -265,15 +127,22 @@ function usePageMotion(
             }
         };
 
+        const measure = () => {
+            needsMeasure = true;
+            schedule();
+        };
+        const resize = new ResizeObserver(measure);
+        if (starfield) resize.observe(starfield);
         window.addEventListener("scroll", schedule, { passive: true });
-        window.addEventListener("resize", schedule);
+        window.addEventListener("resize", measure);
         query.addEventListener("change", schedule);
         schedule();
-        settleTimer = setTimeout(schedule, 400);
+        settleTimer = setTimeout(measure, 400);
 
         return () => {
+            resize.disconnect();
             window.removeEventListener("scroll", schedule);
-            window.removeEventListener("resize", schedule);
+            window.removeEventListener("resize", measure);
             query.removeEventListener("change", schedule);
             if (settleTimer) clearTimeout(settleTimer);
             if (frame) cancelAnimationFrame(frame);
@@ -303,55 +172,52 @@ function Header({ washRef }: { washRef: RefObject<HTMLDivElement | null> }) {
 }
 
 function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
+    const contentRef = useHeroScroll();
+
     return (
-        <div className="orbit-story-hero-shell">
-            <div className="orbit-story-hero">
-                <Starfield density={3.6} fill className="z-0" />
-                <div className="orbit-story-constellation" aria-hidden="true">
-                    <div className="orbit-story-constellation__inner">
-                        <OrbitDiagram
-                            data-hero-constellation
-                            labels={false}
-                            stats
-                            statsZone={[0.42, 0.56]}
-                            center={{ label: "", sub: "" }}
-                            nodes={heroNodes}
-                            speed={1.1}
-                            packetSize={1.1}
-                        />
-                    </div>
-                </div>
-                <div className="orbit-story-blur orbit-story-blur--1" aria-hidden="true" />
-                <div className="orbit-story-blur orbit-story-blur--2" aria-hidden="true" />
-                <div className="orbit-story-blur orbit-story-blur--3" aria-hidden="true" />
-                <div className="orbit-story-blur orbit-story-blur--4" aria-hidden="true" />
-                <div className="orbit-story-blur orbit-story-blur--solid" aria-hidden="true" />
+        <div className="orbit-story-hero-shell" data-flowing={!showIntroDivider ? "" : undefined}>
+            <div className="orbit-story-hero" data-hero-scene>
+                <HeroConstellations />
                 <section data-hero className="orbit-story-hero__copy">
-                    <div className="max-w-[min(62ch,60%)]">
-                        <div className="orbit-label mb-5">
-                            Open source · self-hosted · agent-driven
+                    <div
+                        ref={contentRef}
+                        data-hero-content
+                        className="mx-auto w-full max-w-[1120px] text-center"
+                    >
+                        <div data-hero-entrance>
+                            <div className="orbit-label mb-5">
+                                <span data-hero-enter="open-source">Open source</span>{" "}
+                                <span data-hero-enter="self-hosted">· self-hosted</span>{" "}
+                                <span data-hero-enter="agent-driven">· agent-driven</span>
+                            </div>
+                            <h1
+                                data-hero-enter="title"
+                                className="mx-auto max-w-[32ch] text-[clamp(42px,5vw,80px)] leading-[0.98] font-medium tracking-[-0.035em] text-balance"
+                            >
+                                Develop your ideas faster on your own agent-run infra.
+                            </h1>
+                            <p
+                                data-hero-enter="description"
+                                className="mx-auto mt-[26px] max-w-[72ch] text-lg leading-[1.58] tracking-[-0.018em] text-pretty text-orbit-secondary"
+                            >
+                                Orbit turns the machines you already own into an always-on
+                                development network — provisioned, routed, and repaired by your
+                                agent, reachable from every device you carry.
+                            </p>
+                            <div
+                                data-cta
+                                data-hero-enter="buttons"
+                                className="mt-8 flex flex-wrap justify-center gap-4"
+                            >
+                                <ButtonLink href="#story">Read the story</ButtonLink>
+                                <ButtonLink href="#install" variant="outline">
+                                    Quickstart
+                                </ButtonLink>
+                            </div>
                         </div>
-                        <h1 className="max-w-[24ch] text-[clamp(38px,4vw,64px)] leading-[0.98] font-medium tracking-[-0.035em]">
-                            Develop your ideas faster on your own agent-run infra.
-                        </h1>
-                        <p className="mt-[26px] max-w-[52ch] text-lg leading-[1.58] tracking-[-0.018em] text-orbit-secondary">
-                            Orbit turns the machines you already own into an always-on development
-                            network — provisioned, routed, and repaired by your agent, reachable
-                            from every device you carry.
-                        </p>
-                        <div className="mt-8 flex flex-wrap gap-4">
-                            <ButtonLink href="#story">Read the story</ButtonLink>
-                            <ButtonLink href="#install" variant="outline">
-                                Quickstart
-                            </ButtonLink>
-                        </div>
-                        <Snippet
-                            command="composer global require nckrtl/orbit"
-                            className="mt-6 max-w-[420px]"
-                        />
                     </div>
                 </section>
-                <Ruler rulerRef={rulerRef} position="bottom" />
+                {showIntroDivider ? <Ruler rulerRef={rulerRef} position="bottom" /> : null}
             </div>
         </div>
     );
@@ -362,7 +228,7 @@ function Ruler({
     rulerRef,
 }: {
     position: "bottom" | "top";
-    rulerRef: RefObject<HTMLDivElement | null>;
+    rulerRef?: RefObject<HTMLDivElement | null>;
 }) {
     return (
         <div aria-hidden="true" className={`orbit-story-ruler orbit-story-ruler--${position}`}>
@@ -371,150 +237,83 @@ function Ruler({
     );
 }
 
-function StoryDivider({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
+function StoryDivider({
+    rulerRef,
+    bothSides = false,
+}: {
+    rulerRef?: RefObject<HTMLDivElement | null>;
+    bothSides?: boolean;
+}) {
     return (
         <>
+            {bothSides ? <Ruler position="bottom" /> : null}
             <div aria-hidden="true" className="orbit-story-hatch" />
             <Ruler rulerRef={rulerRef} position="top" />
         </>
     );
 }
 
-function Laptop({ phase }: { phase: "closed" | "dim" | "run" }) {
-    const closed = phase !== "run";
-
-    return (
-        <div className="flex w-full flex-col items-center">
-            <div data-laptop className="orbit-laptop-scene">
-                <div className="orbit-laptop">
-                    <div className="orbit-laptop__base">
-                        <div className="orbit-laptop__keyboard" />
-                        <div className="orbit-laptop__trackpad" />
-                    </div>
-                    <div className="orbit-laptop__front" />
-                    <div className="orbit-laptop__side" />
-                    <div data-lid={closed ? "closed" : "open"} className="orbit-laptop__lid">
-                        <div
-                            data-sess
-                            data-run={closed ? "0" : "1"}
-                            className="orbit-laptop__session"
-                        >
-                            <div className="orbit-session-line orbit-session-line--1 text-orbit-primary">
-                                <span className="text-orbit-muted">❯</span> agent run &quot;tidy up
-                                Node.php&quot;
-                            </div>
-                            <div className="orbit-session-line orbit-session-line--2">
-                                · read src/Orbit/Node.php · 412 lines
-                            </div>
-                            <div className="orbit-session-line orbit-session-line--3">
-                                · edit src/Orbit/Node.php, NodeTest.php
-                            </div>
-                            <div className="orbit-session-line orbit-session-line--4">
-                                <span className="text-orbit-primary">+34</span>{" "}
-                                <span className="text-orbit-faint">−12</span> across 2 files
-                            </div>
-                            <div className="orbit-session-line orbit-session-line--5 text-orbit-primary">
-                                <span className="text-orbit-muted">❯</span> vendor/bin/pest{" "}
-                                <span data-caret className="orbit-laptop__caret" />
-                            </div>
-                            <div className="mt-auto flex items-center gap-2.5">
-                                <div className="h-[3px] flex-1 bg-orbit-hairline">
-                                    <div data-bar className="orbit-laptop__progress" />
-                                </div>
-                                <span className="text-[11px] text-orbit-faint">tests</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div className="orbit-label mt-2 text-center">lid closes · work stops</div>
-        </div>
-    );
-}
-
-function topologyNodes(roles: RoleState): OrbitNode[] {
-    const developmentSatellites = [{ label: "app-1", role: "app-1", angle: 10 }];
-
-    if (roles.database && !roles.dedicatedDatabase) {
-        developmentSatellites.push({ label: "database", role: "database", angle: 190 });
-    }
-
-    const nodes: OrbitNode[] = [
-        {
-            label: "dev-01",
-            role: "app-dev",
-            angle: -15,
-            satellites: developmentSatellites,
-        },
-    ];
-
-    if (roles.dedicatedDatabase) {
-        nodes.push({ label: "db-01", role: "database", angle: 120, ring: 2 });
-    }
-
-    if (roles.production) {
-        nodes.push({
-            label: "prod-01",
-            role: "app-prod",
-            angle: 185,
-            cluster: "cluster: production",
-            satellites: [
-                { label: "router-01", role: "router", angle: 30 },
-                { label: "ingress-01", role: "ingress", angle: 210 },
-            ],
-        });
-    }
-
-    return nodes;
-}
-
-function RoleChips({
-    roles,
-    setRoles,
-}: {
-    roles: RoleState;
-    setRoles: (roles: RoleState) => void;
-}) {
-    const definitions: { key: keyof RoleState; label: string }[] = [
-        { key: "database", label: "database on dev-01" },
-        { key: "dedicatedDatabase", label: "dedicated database node" },
-        { key: "production", label: "production node + cluster" },
-    ];
-
-    return (
-        <div className="mt-8 flex flex-wrap gap-2.5" aria-label="Topology roles">
-            {definitions.map((definition) => {
-                const active = roles[definition.key];
-
-                return (
-                    <button
-                        key={definition.key}
-                        type="button"
-                        data-role-chip={definition.key}
-                        aria-pressed={active}
-                        onClick={() => setRoles({ ...roles, [definition.key]: !active })}
-                        className={`orbit-role-chip ${active ? "orbit-role-chip--active" : ""}`}
-                    >
-                        <Icon name={active ? "check" : "plus"} className="size-3" />
-                        {definition.label}
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
 function Story() {
-    const laptopPhase = useLaptopPhase();
-    const [roles, setRoles] = useState<RoleState>({
-        database: true,
-        dedicatedDatabase: false,
-        production: false,
-    });
+    const ref = useStoryCopyScroll();
+
+    useEffect(() => {
+        const elements = ref.current?.querySelectorAll<HTMLElement>("[data-story-enter]");
+        if (!elements) return;
+        const motion = matchMedia("(prefers-reduced-motion: reduce)");
+        const desktop = matchMedia("(min-width: 901px)");
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(({ target, isIntersecting }) => {
+                    if (!isIntersecting) return;
+                    (target as HTMLElement).dataset.enterState = "visible";
+                    observer.unobserve(target);
+                    if (desktop.matches) {
+                        const visual = target.parentElement?.querySelector<HTMLElement>(
+                            '[data-story-enter="visual"]',
+                        );
+                        if (visual) visual.dataset.enterState = "visible";
+                    }
+                });
+            },
+            { rootMargin: "0px 0px -80px 0px", threshold: 0.01 },
+        );
+        const observe = () => {
+            observer.disconnect();
+            elements.forEach((element) => {
+                const copyVisible =
+                    desktop.matches &&
+                    element.parentElement
+                        ?.querySelector('[data-story-enter="copy"]')
+                        ?.getAttribute("data-enter-state") === "visible";
+                if (motion.matches || copyVisible) element.dataset.enterState = "visible";
+                else if (
+                    element.dataset.enterState !== "visible" &&
+                    (!desktop.matches || element.dataset.storyEnter === "copy")
+                ) {
+                    observer.observe(element);
+                }
+            });
+        };
+        // Enhance after hydration: without JavaScript the story remains readable.
+        // Observe the columns separately so mobile artwork waits until it enters view.
+        elements.forEach((element) => {
+            element.dataset.enterState = motion.matches ? "visible" : "waiting";
+        });
+        observe();
+        motion.addEventListener("change", observe);
+        desktop.addEventListener("change", observe);
+        return () => {
+            observer.disconnect();
+            motion.removeEventListener("change", observe);
+            desktop.removeEventListener("change", observe);
+            elements.forEach((element) => delete element.dataset.enterState);
+        };
+    }, []);
 
     return (
-        <div id="story" className="orbit-story-chapters">
-            <Starfield density={3.6} fill />
+        <div ref={ref} id="story" className="orbit-story-chapters">
+            <StoryHandoff />
+            <StoryHandoff stage="topology" />
             {chapters.map((chapter) => (
                 <section
                     key={chapter.id}
@@ -523,56 +322,36 @@ function Story() {
                     className="orbit-story-chapter"
                 >
                     <div className="orbit-story-chapter__grid">
-                        <div className="orbit-story-chapter__copy">
-                            <div className="mb-[22px] flex items-baseline gap-2.5 font-mono text-[10.5px] tracking-[0.16em] uppercase">
+                        <div className="orbit-story-chapter__copy" data-story-enter="copy">
+                            <div
+                                data-story-copy-part="label"
+                                className="mb-[22px] flex items-baseline gap-2.5 font-mono text-[10.5px] tracking-[0.16em] uppercase"
+                            >
                                 <span className="text-orbit-muted">{chapter.step}</span>
                                 <span className="text-orbit-secondary">{chapter.kicker}</span>
                             </div>
-                            <h2 className="max-w-[26ch] text-[clamp(28px,2.9vw,40px)] leading-[1.1] font-medium tracking-[-0.032em]">
+                            <h2
+                                data-story-copy-part="title"
+                                className="max-w-[26ch] text-[clamp(28px,2.9vw,40px)] leading-[1.1] font-medium tracking-[-0.032em]"
+                            >
                                 {chapter.title}
                             </h2>
-                            <p className="mt-6 max-w-[52ch] text-base leading-[1.62] text-orbit-secondary">
-                                {chapter.body}
-                            </p>
-                            {chapter.aside ? (
-                                <p className="mt-5 max-w-[52ch] text-sm leading-[1.6] text-orbit-muted">
-                                    {chapter.aside}
+                            <div data-story-copy-part="body" className="mt-6">
+                                <p className="max-w-[52ch] text-base leading-[1.62] text-orbit-secondary">
+                                    {chapter.body}
                                 </p>
-                            ) : null}
-                            {chapter.type === "topology" ? (
-                                <RoleChips roles={roles} setRoles={setRoles} />
-                            ) : null}
-                            {chapter.command ? (
-                                <Terminal
-                                    title={chapter.command.title}
-                                    lines={chapter.command.lines}
-                                    dense
-                                    className="mt-8"
-                                />
-                            ) : null}
+                                {chapter.aside ? (
+                                    <p className="mt-5 max-w-[52ch] text-sm leading-[1.6] text-orbit-muted">
+                                        {chapter.aside}
+                                    </p>
+                                ) : null}
+                            </div>
                         </div>
-                        <div className="orbit-story-chapter__visual">
-                            {chapter.type === "laptop" ? <Laptop phase={laptopPhase} /> : null}
-                            {chapter.type === "diagram" ? (
-                                <OrbitDiagram
-                                    operator={chapter.operator}
-                                    center={chapter.center}
-                                    nodes={chapter.nodes}
-                                    caption={chapter.caption}
-                                    statsZone={[0.02, 0.74]}
-                                    stats
-                                    selected={chapter.selected}
-                                />
-                            ) : null}
+                        <div className="orbit-story-chapter__visual" data-story-enter="visual">
+                            {chapter.type === "laptop" ? <Laptop /> : null}
+                            {chapter.type === "handoff" ? <PremiseScene /> : null}
                             {chapter.type === "topology" ? (
-                                <OrbitDiagram
-                                    operator={chapter.operator}
-                                    center={chapter.center}
-                                    nodes={topologyNodes(roles)}
-                                    caption={chapter.caption}
-                                    statsZone={[0.02, 0.74]}
-                                    stats
-                                />
+                                <TopologyScene roles={storyRoles} />
                             ) : null}
                         </div>
                     </div>
@@ -582,121 +361,20 @@ function Story() {
     );
 }
 
-const agentBenefits = [
-    {
-        icon: "sparkles",
-        title: "One interface for logs, actions, and state",
-        body: "The agent reads a process log or restarts a service the same way on every node, instead of inventing an SSH incantation each time.",
-    },
-    {
-        icon: "boxes",
-        title: "Placement is deterministic",
-        body: "An app placed on a node is set up the same way on any node, because the steps are codified in Orbit rather than improvised per machine.",
-    },
-    {
-        icon: "stethoscope",
-        title: "Drift is reported, not guessed at",
-        body: "orbit doctor compares what the Gateway expects with what is on the machine, and changes nothing.",
-    },
-];
-
-function Build() {
-    return (
-        <section id="build" className="orbit-story-build">
-            <div className="orbit-label mb-4">What it costs your agent</div>
-            <h2 className="max-w-[min(24ch,calc(50%_-_28px))] text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em] max-md:max-w-[24ch]">
-                Codified operations, so the agent stops guessing.
-            </h2>
-            <div className="orbit-story-build__grid">
-                <div className="flex flex-col gap-[22px]">
-                    {agentBenefits.map((benefit) => (
-                        <div key={benefit.title} className="flex gap-3.5">
-                            <Icon name={benefit.icon} className="mt-[3px] size-[18px] shrink-0" />
-                            <div>
-                                <h3 className="text-[17px] font-medium tracking-[-0.018em]">
-                                    {benefit.title}
-                                </h3>
-                                <p className="mt-2 max-w-[44ch] text-[13.5px] leading-[1.58] text-orbit-secondary">
-                                    {benefit.title === "Drift is reported, not guessed at" ? (
-                                        <>
-                                            <code className="text-[12.5px]">orbit doctor</code>{" "}
-                                            compares what the Gateway expects with what is on the
-                                            machine, and changes nothing.
-                                        </>
-                                    ) : (
-                                        benefit.body
-                                    )}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <Terminal title="orbit · agent session" lines={agentLines} />
-            </div>
-        </section>
-    );
-}
-
-const ownedMachines = [
-    { icon: "hard-drive", name: "old desktop", role: "app-dev + database roles" },
-    { icon: "cpu", name: "mini pc", role: "gateway: store, wireguard, dns" },
-    { icon: "globe", name: "rented vps", role: "app-prod + ingress, for what you publish" },
-];
-
 function OwnedMachine() {
     return (
-        <div className="border-t border-orbit-hairline">
+        <div>
+            <CoreFunnel />
             <section className="orbit-owned-machine">
-                <div>
-                    <div className="orbit-label mb-4">Use what you own</div>
-                    <h2 className="max-w-[22ch] text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em]">
-                        That machine in the closet is a node.
-                    </h2>
-                    <p className="mt-5 max-w-[50ch] text-base leading-[1.6] text-orbit-secondary">
-                        An old desktop, a mini PC, a spare laptop, a rented box — anything that runs
-                        Ubuntu 26.04 and accepts an SSH key can join the network and start hosting
-                        apps. No third-party platform in the middle, no per-seat pricing, no data
-                        leaving your hardware.
-                    </p>
-                    <p className="mt-[18px] max-w-[50ch] text-sm leading-[1.6] text-orbit-muted">
-                        Orbit is open source. Read it, fork it, run it on your own terms.
-                    </p>
+                <div className="orbit-owned-machine__intro">
+                    <div>
+                        <div className="orbit-label mb-4">Own your foundation</div>
+                        <h2 className="max-w-[22ch] text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em]">
+                            A steady core. An open fleet.
+                        </h2>
+                    </div>
                 </div>
-                <div className="grid gap-3">
-                    {ownedMachines.map((machine) => (
-                        <div key={machine.name} className="orbit-machine-card">
-                            <Icon name={machine.icon} className="size-[18px] shrink-0" />
-                            <div>
-                                <div className="font-mono text-[12.5px] text-orbit-primary">
-                                    {machine.name}
-                                </div>
-                                <div className="mt-[3px] text-[13px] text-orbit-muted">
-                                    {machine.role}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </section>
-        </div>
-    );
-}
-
-function Install() {
-    return (
-        <div className="border-t border-orbit-hairline">
-            <section id="install" className="orbit-story-install">
-                <h2 className="text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em]">
-                    One install, then tell your agent.
-                </h2>
-                <p className="mx-auto mt-5 max-w-[46ch] text-[17px] leading-[1.58] text-orbit-secondary">
-                    PHP 8.5 and one command on your own machine. Everything after that happens on
-                    hardware you control.
-                </p>
-                <Snippet
-                    command="composer global require nckrtl/orbit"
-                    className="mx-auto mt-8 max-w-[420px] text-left"
-                />
+                <OwnedInfrastructure />
             </section>
         </div>
     );
@@ -704,20 +382,24 @@ function Install() {
 
 function Footer() {
     return (
-        <footer className="border-t border-orbit-hairline px-orbit-gutter py-10">
-            <div className="mx-auto flex max-w-orbit-container flex-wrap gap-6 font-mono text-[10.5px] tracking-[0.16em] text-orbit-muted uppercase">
-                <span>Orbit</span>
-                <span>v0.4.0</span>
-                <a href={githubUrl} target="_blank" rel="noreferrer">
-                    Open source
-                </a>
-                <span className="ml-auto">Self-hosted</span>
+        <footer className="border-t border-orbit-hairline py-10">
+            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-6 px-orbit-gutter font-mono text-[10.5px] tracking-[0.16em] text-orbit-muted uppercase">
+                <div className="flex items-center gap-6">
+                    <img src="/assets/orbit/logo-white.svg" width="24" height="24" alt="Orbit" />
+                    <span>v0.4.0</span>
+                </div>
+                <div className="ml-auto flex items-center gap-6 whitespace-nowrap">
+                    <a href={githubUrl} target="_blank" rel="noreferrer">
+                        Open source
+                    </a>
+                    <span>Self-hosted</span>
+                </div>
             </div>
         </footer>
     );
 }
 
-export function OrbitHomepage() {
+export function OrbitHomepage({ orbitUrl }: { orbitUrl: string }) {
     const headerWash = useRef<HTMLDivElement>(null);
     const firstRuler = useRef<HTMLDivElement>(null);
     const secondRuler = useRef<HTMLDivElement>(null);
@@ -727,16 +409,30 @@ export function OrbitHomepage() {
     return (
         <div
             id="top"
-            className="min-h-screen overflow-x-clip bg-orbit-void text-orbit-primary antialiased"
+            className="relative isolate min-h-screen overflow-x-clip bg-orbit-void text-orbit-primary antialiased"
         >
+            <Starfield
+                density={7.2}
+                fill
+                scrollRotate
+                className="orbit-page-starfield"
+                data-page-stars=""
+            />
             <Header washRef={headerWash} />
             <main>
                 <Hero rulerRef={firstRuler} />
-                <StoryDivider rulerRef={secondRuler} />
+                {showIntroDivider ? <StoryDivider rulerRef={secondRuler} /> : null}
                 <Story />
-                <Build />
+                <div data-story-divider="reverse" aria-hidden="true">
+                    <StoryDivider bothSides />
+                </div>
+                <Capabilities />
+                <div data-story-divider="build" aria-hidden="true">
+                    <StoryDivider bothSides />
+                </div>
+                <DevelopmentEnvironments />
                 <OwnedMachine />
-                <Install />
+                <Install orbitUrl={orbitUrl} />
             </main>
             <Footer />
         </div>
