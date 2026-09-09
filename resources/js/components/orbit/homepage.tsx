@@ -11,6 +11,10 @@ import { DevelopmentEnvironments } from "./development-environments";
 import { HeroConstellations } from "./hero-constellation";
 import { useHeroScroll } from "./hero-scroll";
 import { useStoryCopyScroll } from "./story-copy-scroll";
+import { useScrollReveal } from "./use-scroll-reveal";
+import { foundationSequence } from "./finale-reveal";
+import { MobileMenu } from "./mobile-menu";
+import { useHeaderScroll } from "./use-header-scroll";
 
 const githubUrl = "https://github.com/nckrtl/orbit";
 // Set to true to restore the intro's clipped constellation and ticked divider.
@@ -39,7 +43,7 @@ const chapters: Chapter[] = [
         step: "01",
         kicker: "The problem",
         title: "Local development stops when your laptop does.",
-        body: "A local environment on your own machine is hard to beat — until agents start doing the work. Then you want it running while you sleep, and you want to open the project on your tablet, your phone, or a hotel wifi network. localhost does none of that.",
+        body: "A local environment is hard to beat — until agents start doing the work. Agents do their best work in long, unattended runs. Queues and schedulers need to keep ticking. You want to open the preview on your phone. Close the lid, and all of it stops.",
         aside: "Leaving the laptop on all night is not an environment. It is a workaround.",
         caption: "lid closes · work stops",
         type: "laptop",
@@ -47,21 +51,21 @@ const chapters: Chapter[] = [
     {
         id: "premise",
         step: "02",
-        kicker: "The premise",
+        kicker: "The Gateway",
         title: "Move the work. Keep the control.",
-        body: "Let an always-on machine run the agents, the queues, and the projects. Your laptop is where you direct the work, not where it has to live. Close the lid: everything keeps running, and the same project is still there on your phone or tablet.",
-        aside: "Your machine. Your network. Your rules. Orbit connects the pieces — a record of what exists, a private network to reach it, and names that resolve inside it.",
-        caption: "control here · workload elsewhere",
+        body: "Put one always-on machine in the middle: your Gateway. Your laptop, phone, and tablet connect to it, not to each other, so closing the lid changes nothing. The Gateway keeps the record of what exists, the private network to reach it, and the names that resolve inside it.",
+        aside: "Your machine. Your network. Your rules. Orbit runs where you put it, so the record of your work stays with you.",
+        caption: "devices connect here · not to the laptop",
         type: "handoff",
     },
     {
         id: "topology",
         step: "03",
-        kicker: "Room to grow",
+        kicker: "The fleet",
         title: "Start with one machine. Make room for what’s next.",
-        body: "Give background work a node of its own. Keep a database beside your apps, or move it to a dedicated machine. When you need production, bring related nodes together in a cluster.",
-        aside: "The shape can change. Your Gateway remains the same point of control.",
-        caption: "more nodes · the same network",
+        body: "Every machine that joins becomes a node. Give background work a node of its own. Keep the database beside your apps, or move it to a dedicated machine. When you need production, group nodes into a cluster with its own name.",
+        aside: "The shape can change. The Gateway still holds the one record of the whole fleet.",
+        caption: "more nodes · one record",
         type: "topology",
     },
 ];
@@ -73,11 +77,12 @@ function usePageMotion(
 ) {
     useEffect(() => {
         const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const compact = window.matchMedia("(max-width: 1100px)");
         let frame = 0;
         let settleTimer: ReturnType<typeof setTimeout> | null = null;
         const starfield = document.querySelector<HTMLElement>("[data-page-stars]");
         const dividerMarks = document.querySelectorAll<HTMLElement>(
-            "[data-story-divider] .orbit-story-ruler__marks, [data-story-divider] .orbit-story-hatch",
+            "[data-story-divider] .orbit-story-ruler__marks, [data-story-divider] .orbit-story-hatch, [data-install-ruler] .orbit-story-ruler__marks",
         );
         let needsMeasure = true;
         let scrollRange = 1;
@@ -93,13 +98,21 @@ function usePageMotion(
                     document.documentElement.scrollHeight - window.innerHeight,
                 );
                 if (starfield && bounds) {
-                    starfield.style.setProperty("--starfield-pad-x", `${bounds.height * 0.08}px`);
-                    starfield.style.setProperty("--starfield-pad-y", `${bounds.width * 0.08}px`);
+                    starfield.style.setProperty(
+                        "--starfield-pad-x",
+                        `${compact.matches ? 0 : bounds.height * 0.08}px`,
+                    );
+                    starfield.style.setProperty(
+                        "--starfield-pad-y",
+                        `${compact.matches ? 0 : bounds.width * 0.08}px`,
+                    );
                 }
                 needsMeasure = false;
             }
             if (headerWash.current) {
-                headerWash.current.style.opacity = scrollY > 4 ? "1" : "0";
+                const scrolled = scrollY > 0;
+                headerWash.current.style.opacity = scrolled ? "1" : "0";
+                headerWash.current.parentElement?.setAttribute("data-scrolled", String(scrolled));
             }
 
             const offset = query.matches ? 0 : -scrollY * 0.45;
@@ -116,7 +129,9 @@ function usePageMotion(
                 // One continuous star plane and one scroll angle for the whole
                 // page, including the transition from the intro to the story.
                 const progress = Math.max(0, Math.min(1, scrollY / scrollRange));
-                const angle = query.matches ? 0 : progress * 6;
+                // Keep the full-page texture static on smaller devices. Local
+                // scenes still move without compositing a rotated, page-sized layer.
+                const angle = query.matches || compact.matches ? 0 : progress * 6;
                 starfield.style.setProperty("--starfield-rotation", `${angle}deg`);
             }
         };
@@ -151,8 +166,10 @@ function usePageMotion(
 }
 
 function Header({ washRef }: { washRef: RefObject<HTMLDivElement | null> }) {
+    const ref = useHeaderScroll();
+
     return (
-        <header className="orbit-story-header">
+        <header ref={ref} className="orbit-story-header">
             <div ref={washRef} aria-hidden="true" className="orbit-story-header__wash" />
             <div className="orbit-story-header__inner">
                 <a href="#top" aria-label="Orbit home" className="border-0">
@@ -161,11 +178,12 @@ function Header({ washRef }: { washRef: RefObject<HTMLDivElement | null> }) {
                 <nav aria-label="Primary navigation" className="orbit-story-nav">
                     <a href="#story">Story</a>
                     <a href="#build">Build</a>
-                    <a href="#install">Install</a>
+                    <a href="#install">Setup</a>
                 </nav>
                 <ButtonLink href="#install" size="sm" className="ml-auto">
                     Get started
                 </ButtonLink>
+                <MobileMenu />
             </div>
         </header>
     );
@@ -186,15 +204,15 @@ function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
                     >
                         <div data-hero-entrance>
                             <div className="orbit-label mb-5">
-                                <span data-hero-enter="open-source">Open source</span>{" "}
+                                <span data-hero-enter="open-source">Open-source</span>{" "}
                                 <span data-hero-enter="self-hosted">· self-hosted</span>{" "}
-                                <span data-hero-enter="agent-driven">· agent-driven</span>
+                                <span data-hero-enter="agent-driven">· agent-run</span>
                             </div>
                             <h1
                                 data-hero-enter="title"
                                 className="mx-auto max-w-[32ch] text-[clamp(42px,5vw,80px)] leading-[0.98] font-medium tracking-[-0.035em] text-balance"
                             >
-                                Develop your ideas faster on your own agent-run infra.
+                                Build your ideas on machines you own, run by your agent.
                             </h1>
                             <p
                                 data-hero-enter="description"
@@ -211,7 +229,7 @@ function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
                             >
                                 <ButtonLink href="#story">Read the story</ButtonLink>
                                 <ButtonLink href="#install" variant="outline">
-                                    Quickstart
+                                    Skip to setup
                                 </ButtonLink>
                             </div>
                         </div>
@@ -265,10 +283,11 @@ function Story() {
             (entries) => {
                 entries.forEach(({ target, isIntersecting }) => {
                     if (!isIntersecting) return;
-                    (target as HTMLElement).dataset.enterState = "visible";
+                    const element = target.closest<HTMLElement>("[data-story-enter]")!;
+                    element.dataset.enterState = "visible";
                     observer.unobserve(target);
                     if (desktop.matches) {
-                        const visual = target.parentElement?.querySelector<HTMLElement>(
+                        const visual = element.parentElement?.querySelector<HTMLElement>(
                             '[data-story-enter="visual"]',
                         );
                         if (visual) visual.dataset.enterState = "visible";
@@ -290,7 +309,11 @@ function Story() {
                     element.dataset.enterState !== "visible" &&
                     (!desktop.matches || element.dataset.storyEnter === "copy")
                 ) {
-                    observer.observe(element);
+                    observer.observe(
+                        element.dataset.storyEnter === "copy" && !desktop.matches
+                            ? element.querySelector("h2")!
+                            : element,
+                    );
                 }
             });
         };
@@ -362,16 +385,24 @@ function Story() {
 }
 
 function OwnedMachine() {
+    const ref = useRef<HTMLElement>(null);
+    useScrollReveal(ref, foundationSequence, "foundation");
+
     return (
         <div>
             <CoreFunnel />
-            <section className="orbit-owned-machine">
+            <section ref={ref} className="orbit-owned-machine">
                 <div className="orbit-owned-machine__intro">
                     <div>
                         <div className="orbit-label mb-4">Own your foundation</div>
                         <h2 className="max-w-[22ch] text-[clamp(30px,3.2vw,44px)] leading-[1.12] font-medium tracking-[-0.035em]">
-                            A steady core. An open fleet.
+                            A steady core. Swap the rest.
                         </h2>
+                        <p className="mx-auto mt-6 max-w-[62ch] text-[17px] leading-[1.6] text-pretty text-orbit-secondary">
+                            Everything Orbit knows about your setup lives in one record on your
+                            Gateway: machines, apps, processes, tools, rules. Agents, environments,
+                            and nodes can come and go. The record stays, and it stays yours.
+                        </p>
                     </div>
                 </div>
                 <OwnedInfrastructure />
@@ -382,7 +413,7 @@ function OwnedMachine() {
 
 function Footer() {
     return (
-        <footer className="border-t border-orbit-hairline py-10">
+        <footer className="border-t border-orbit-hairline py-6">
             <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-6 px-orbit-gutter font-mono text-[10.5px] tracking-[0.16em] text-orbit-muted uppercase">
                 <div className="flex items-center gap-6">
                     <img src="/assets/orbit/logo-white.svg" width="24" height="24" alt="Orbit" />
@@ -412,7 +443,9 @@ export function OrbitHomepage({ orbitUrl }: { orbitUrl: string }) {
             className="relative isolate min-h-screen overflow-x-clip bg-orbit-void text-orbit-primary antialiased"
         >
             <Starfield
-                density={7.2}
+                // The CSS texture supplies the dense background; reserve DOM
+                // elements and intersection tracking for a few local twinkles.
+                density={2.4}
                 fill
                 scrollRotate
                 className="orbit-page-starfield"

@@ -1,7 +1,11 @@
+import { observeSceneActivity } from "./animation";
 import { Activity, Boxes, RefreshCw, ServerCog, ShieldCheck, Wrench } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 const projection = Math.sqrt(3) / 2;
+const plateRadius = 10;
+// Match the inner tiles' curves across the platform's 20-unit inset.
+const platformRadius = plateRadius + 20;
 const resources = [
     { label: "projects", u: -192, v: -192 },
     { label: "apps", u: 0, v: -192 },
@@ -130,7 +134,7 @@ function Slab({
     base?: boolean;
 }) {
     const [x, y] = point(u - width / 2, v - depth / 2, lift);
-    const radius = base ? 14 : 10;
+    const radius = base ? platformRadius : plateRadius;
     const wall = slabWall(width, depth, radius);
     return (
         <g data-foundation-slab transform={`matrix(${projection} .5 ${-projection} .5 ${x} ${y})`}>
@@ -213,8 +217,6 @@ export function OwnedInfrastructure() {
         const scene = ref.current;
         if (!scene) return;
         const plates = [...scene.querySelectorAll<SVGGElement>("[data-foundation-plate]")];
-        const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        let visible = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         let active: SVGGElement | undefined;
         let bag: SVGGElement[] = [];
@@ -239,22 +241,13 @@ export function OwnedInfrastructure() {
             active?.setAttribute("data-highlighted", "true");
             timer = setTimeout(highlight, 2400 + Math.random() * 1200);
         };
-        const sync = () => {
-            if (!visible || document.hidden || motion.matches) stop();
+        const unobserve = observeSceneActivity(scene, ({ active }) => {
+            if (!active) stop();
             else if (timer === undefined) highlight();
-        };
-        const observer = new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting;
-            sync();
         });
-        observer.observe(scene);
-        document.addEventListener("visibilitychange", sync);
-        motion.addEventListener("change", sync);
         return () => {
             stop();
-            observer.disconnect();
-            document.removeEventListener("visibilitychange", sync);
-            motion.removeEventListener("change", sync);
+            unobserve();
         };
     }, []);
 
@@ -308,7 +301,7 @@ export function OwnedInfrastructure() {
                         <circle
                             data-foundation-outlet
                             cx={560}
-                            cy={320 + 300 + 8 - 14 + 14 * Math.SQRT1_2}
+                            cy={320 + 300 + 8 - platformRadius + platformRadius * Math.SQRT1_2}
                             r={0}
                             aria-hidden="true"
                         />

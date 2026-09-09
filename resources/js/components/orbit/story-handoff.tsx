@@ -1,5 +1,12 @@
 import { useEffect, useId, useRef } from "react";
-import { laptopCloseStart, storyEntranceEnd } from "./story-entrance";
+import {
+    laptopCloseStart,
+    storyCopyBounds,
+    storyEntranceEnd,
+    storyLayoutBounds,
+    storyParallaxOffset,
+} from "./story-entrance";
+import { useSceneViewport } from "./use-scene-viewport";
 import {
     globe,
     ConstellationSignalGradient,
@@ -101,6 +108,7 @@ export { PremiseScene } from "./server-scene";
 export function TopologyScene({ roles }: { roles: StoryRoles }) {
     const signalGradient = useId();
     const ref = useStoryMotion(`${roles.database}:${roles.dedicatedDatabase}:${roles.production}`);
+    useSceneViewport(ref, "0 0 1080 1080", "180 150 780 850", "0 100 1080 900");
     const bodies = topologyBodies.filter((body) => {
         if (body.id === "db-01") return roles.dedicatedDatabase;
         if (body.id === "database") return roles.database && !roles.dedicatedDatabase;
@@ -219,6 +227,10 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
         let length = 0;
         let lastProgress = -1;
         let direction = 1;
+        const destinationGrid = target.closest<HTMLElement>(".orbit-story-chapter__grid");
+        let parallaxTravel = 0;
+        let previousTargetOffset = NaN;
+        let drawRoute: ((offset: number) => void) | undefined;
 
         const entranceOffset = (element: Element) => {
             const entrance = element.closest<HTMLElement>(
@@ -232,44 +244,49 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
                 circle.cx.baseVal.value,
                 circle.cy.baseVal.value,
             ).matrixTransform(circle.getScreenCTM()!);
-            return { x: p.x - bounds.left, y: p.y - bounds.top };
+            return { x: p.x - bounds.left, y: p.y - bounds.top - storyParallaxOffset(circle) };
         };
         const measure = () => {
             const bounds = root.getBoundingClientRect();
             const from = point(source, bounds);
             const to = point(target, bounds);
-            const visual = scene.getBoundingClientRect();
-            const local = source.closest("svg")!.getBoundingClientRect();
+            const visual = storyLayoutBounds(scene);
+            const local = storyLayoutBounds(source.closest("svg")!);
+            parallaxTravel = parseFloat(
+                getComputedStyle(svg).getPropertyValue("--distance-story-parallax"),
+            );
             // Trace from the illustration's settled position even when layout
             // is measured halfway through its horizontal entrance.
             from.x -= entranceOffset(source);
             local.x -= entranceOffset(source);
             to.x -= entranceOffset(target);
             visual.x -= entranceOffset(scene);
-            const corridor = Math.min(bounds.width - 12, local.right - bounds.left + 12);
+            const corridor =
+                window.innerWidth <= 900
+                    ? bounds.width - 12
+                    : Math.min(bounds.width - 12, local.right - bounds.left + 12);
             // On desktop, balance the divider between the visible first scene
             // and the next copy/artwork, rather than the SVG's empty top margin.
             // Keep the mobile crossing below its stacked copy.
-            let approach = visual.top - bounds.top - 32;
+            let approach = visual.top - bounds.top + (window.innerWidth <= 900 ? 16 : -32);
             if (!growth && window.innerWidth > 900) {
                 const previousSection = source.closest("section")!;
-                const previousCopy = previousSection
-                    .querySelector(".orbit-story-chapter__copy")!
-                    .getBoundingClientRect();
-                const nextCopy = scene
-                    .closest("section")!
-                    .querySelector(".orbit-story-chapter__copy")!
-                    .getBoundingClientRect();
+                const previousCopy = storyCopyBounds(
+                    previousSection.querySelector(".orbit-story-chapter__copy")!,
+                );
+                const nextCopy = storyCopyBounds(
+                    scene.closest("section")!.querySelector(".orbit-story-chapter__copy")!,
+                );
                 const devices = [
                     ...source.closest("svg")!.querySelectorAll("[data-preview-device]"),
                 ];
                 const previousBottom = Math.max(
                     previousCopy.bottom,
-                    ...devices.map((device) => device.getBoundingClientRect().bottom),
+                    ...devices.map((device) => storyLayoutBounds(device).bottom),
                 );
-                const artworkTop = scene
-                    .querySelector("[data-premise-artwork]")!
-                    .getBoundingClientRect().top;
+                const artworkTop = storyLayoutBounds(
+                    scene.querySelector("[data-premise-artwork]")!,
+                ).top;
                 const nextTop = Math.min(nextCopy.top, artworkTop);
                 approach = (previousBottom + nextTop) / 2 - bounds.top;
             }
@@ -280,35 +297,42 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
             const projection = deck?.getScreenCTM();
             const slope = projection ? projection.b / projection.a : 0;
             const exitY = from.y + (corridor - from.x) * slope;
-            let d = `M ${from.x} ${from.y} L ${corridor - 16} ${exitY - 16 * slope} Q ${corridor} ${exitY} ${corridor} ${exitY + 16} V ${approach - 16} Q ${corridor} ${approach} ${corridor - 16} ${approach} H ${to.x + 16} Q ${to.x} ${approach} ${to.x} ${approach + 16} V ${to.y}`;
-            if (growth) {
-                // Leave the server's bottom port vertically. Only the stacked
-                // mobile layout needs a detour around the third chapter's copy.
-                const left = Math.max(10, local.left - bounds.left - 12);
-                const entry = visual.left - bounds.left + (visual.width * 38) / 740;
-                const copy = scene
-                    .closest("section")!
-                    .querySelector(".orbit-story-chapter__copy")!
-                    .getBoundingClientRect();
-                const cross = Math.min(visual.top, copy.top) - bounds.top - 40;
-                const exit = local.bottom - bounds.top + 24;
-                d =
-                    window.innerWidth > 900
-                        ? `M ${from.x} ${from.y} V ${cross - 16} Q ${from.x} ${cross} ${from.x + 16} ${cross} H ${entry - 16} Q ${entry} ${cross} ${entry} ${cross + 16} V ${to.y - 16} Q ${entry} ${to.y} ${entry + 16} ${to.y} H ${to.x}`
-                        : `M ${from.x} ${from.y} V ${exit - 8} Q ${from.x} ${exit} ${from.x - 8} ${exit} H ${left + 8} Q ${left} ${exit} ${left} ${exit + 8} V ${to.y - 8} Q ${left} ${to.y} ${left + 8} ${to.y} H ${to.x}`;
-            }
-            svg.setAttribute("viewBox", `0 0 ${bounds.width} ${to.y + 2}`);
-            svg.style.height = `${to.y + 2}px`;
-            track.setAttribute("d", d);
-            path.setAttribute("d", d);
-            trailPath.setAttribute("d", d);
-            length = path.getTotalLength();
+            const copy = storyCopyBounds(
+                scene.closest("section")!.querySelector(".orbit-story-chapter__copy")!,
+            );
+            // Rebuild only the wire geometry while its destination drifts. All
+            // layout measurements stay cached; the moving port remains attached.
+            drawRoute = (offset) => {
+                const arrivalY = to.y + offset;
+                const crossing = approach + offset * (!growth && window.innerWidth > 900 ? 0.5 : 1);
+                let d = `M ${from.x} ${from.y} L ${corridor - 16} ${exitY - 16 * slope} Q ${corridor} ${exitY} ${corridor} ${exitY + 16} V ${crossing - 16} Q ${corridor} ${crossing} ${corridor - 16} ${crossing} H ${to.x + 16} Q ${to.x} ${crossing} ${to.x} ${crossing + 16} V ${arrivalY}`;
+                if (growth) {
+                    // Leave the server's bottom port vertically. Only the stacked
+                    // mobile layout needs a detour around the third chapter's copy.
+                    const left =
+                        window.innerWidth <= 900 ? 10 : Math.max(10, local.left - bounds.left - 12);
+                    const entry = visual.left - bounds.left + (visual.width * 38) / 740;
+                    const cross = Math.min(visual.top, copy.top) + offset - bounds.top - 40;
+                    const exit = local.bottom - bounds.top + (window.innerWidth <= 900 ? 8 : 24);
+                    d =
+                        window.innerWidth > 900
+                            ? `M ${from.x} ${from.y} V ${cross - 16} Q ${from.x} ${cross} ${from.x + 16} ${cross} H ${entry - 16} Q ${entry} ${cross} ${entry} ${cross + 16} V ${arrivalY - 16} Q ${entry} ${arrivalY} ${entry + 16} ${arrivalY} H ${to.x}`
+                            : `M ${from.x} ${from.y} V ${exit - 8} Q ${from.x} ${exit} ${from.x - 8} ${exit} H ${left + 8} Q ${left} ${exit} ${left} ${exit + 8} V ${arrivalY - 8} Q ${left} ${arrivalY} ${left + 8} ${arrivalY} H ${to.x}`;
+                }
+                svg.setAttribute("viewBox", `0 0 ${bounds.width} ${to.y + 2}`);
+                svg.style.height = `${to.y + 2}px`;
+                track.setAttribute("d", d);
+                path.setAttribute("d", d);
+                trailPath.setAttribute("d", d);
+                length = path.getTotalLength();
+            };
+            previousTargetOffset = NaN;
             const top = bounds.top + window.scrollY;
             start = laptopCloseStart(local, window.scrollY, window.innerHeight);
             end = top + to.y - window.innerHeight * 0.65;
             if (growth) {
-                start =
-                    local.top + window.scrollY + local.height * 0.78 - window.innerHeight * 0.45;
+                // Keep the same midpoint departure as the first chapter,
+                // while the Gateway and its adjacent copy are still in view.
                 end = Math.max(start + 180, top + to.y - window.innerHeight * 0.7);
             }
             // Start alongside the lid and finish as the destination is revealed.
@@ -316,7 +340,7 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
             end = Math.max(
                 end,
                 storyEntranceEnd(
-                    destination.getBoundingClientRect(),
+                    storyLayoutBounds(destination),
                     window.scrollY,
                     window.innerHeight,
                 ),
@@ -335,8 +359,23 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
             const progress = motion.matches
                 ? 1
                 : clamp((window.scrollY - start) / Math.max(1, end - start));
-            if (progress !== lastProgress) {
-                if (lastProgress >= 0) direction = progress > lastProgress ? 1 : -1;
+            const range = destinationGrid?.dataset;
+            const entrance = clamp(
+                (window.scrollY - Number(range?.parallaxStart ?? 0)) /
+                    Math.max(
+                        1,
+                        Number(range?.parallaxEnd ?? 1) - Number(range?.parallaxStart ?? 0),
+                    ),
+            );
+            const targetOffset = motion.matches ? 0 : -parallaxTravel * (1 - entrance);
+            const targetMoved = targetOffset !== previousTargetOffset;
+            if (targetMoved) {
+                drawRoute?.(targetOffset);
+                previousTargetOffset = targetOffset;
+            }
+            if (progress !== lastProgress || targetMoved) {
+                if (lastProgress >= 0 && progress !== lastProgress)
+                    direction = progress > lastProgress ? 1 : -1;
                 // The signal draws the connection behind it; scrolling back
                 // retracts that same stroke instead of exposing the whole route.
                 track.style.strokeDashoffset = String(1 - progress);

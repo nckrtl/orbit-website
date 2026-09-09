@@ -1,3 +1,4 @@
+import { animateScene } from "./animation";
 import { useEffect, useRef } from "react";
 
 export const gatewayPlanetRadius = 28;
@@ -34,46 +35,19 @@ export function OrbitPlanet({
     useEffect(() => {
         const path = ref.current;
         if (!animated || !path) return;
-        const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        let visible = false;
-        let frame = 0;
-        let previous: number | null = null;
-        let elapsed = 0;
-        let lastDraw = -Infinity;
-        const paint = (now: number) => {
-            if (previous !== null) elapsed += Math.min(now - previous, 50) / 1000;
-            previous = now;
-            if (now - lastDraw >= 1000 / 15) {
-                path.setAttribute("d", globe(radius, seed, elapsed));
-                lastDraw = now;
-            }
-            frame = requestAnimationFrame(paint);
-        };
-        const activity = () => {
-            cancelAnimationFrame(frame);
-            previous = null;
-            const active = visible && !document.hidden && !motion.matches;
-            path.dataset.latitudesAnimating = String(active);
-            if (motion.matches) {
-                elapsed = 0;
-                lastDraw = -Infinity;
-                path.setAttribute("d", globe(radius, seed, 0));
-            }
-            if (active) frame = requestAnimationFrame(paint);
-        };
-        const observer = new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting;
-            activity();
-        });
-        observer.observe(path.ownerSVGElement!);
-        motion.addEventListener("change", activity);
-        document.addEventListener("visibilitychange", activity);
-        activity();
+        const stop = animateScene(
+            path.ownerSVGElement!,
+            (elapsed) => path.setAttribute("d", globe(radius, seed, elapsed)),
+            {
+                fps: () => 15,
+                onActivity: ({ active, reducedMotion }) => {
+                    path.dataset.latitudesAnimating = String(active);
+                    if (reducedMotion) path.setAttribute("d", globe(radius, seed, 0));
+                },
+            },
+        );
         return () => {
-            cancelAnimationFrame(frame);
-            observer.disconnect();
-            motion.removeEventListener("change", activity);
-            document.removeEventListener("visibilitychange", activity);
+            stop();
             delete path.dataset.latitudesAnimating;
         };
     }, [animated, radius, seed]);

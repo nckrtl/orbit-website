@@ -9,6 +9,7 @@ import {
 } from "./laptop";
 import { OnlineDevice } from "./server-scene";
 import { DevelopmentFoundation } from "./development-foundation";
+import { useSceneViewport } from "./use-scene-viewport";
 
 // Center the shared logo / Bifrost axis in the 1100-unit scene.
 const workspace = { x: 550 - hardwarePoint(225, 160)[0], y: 58, width: 450, height: 340 };
@@ -203,8 +204,11 @@ function Plate({
 
 export function DevelopmentStack() {
     const bridgeId = useId();
+    const ref = useRef<SVGSVGElement>(null);
+    useSceneViewport(ref, "0 0 1100 594", "210 0 680 640", "85 0 930 640");
     return (
         <svg
+            ref={ref}
             viewBox="0 0 1100 594"
             className="orbit-stack"
             role="img"

@@ -1,3 +1,4 @@
+import { observeSceneActivity } from "./animation";
 import { useEffect, useRef } from "react";
 import { useMatchedPlanetRadius } from "./use-matched-planet-radius";
 import { OrbitPlanet } from "./orbit-planet";
@@ -69,31 +70,23 @@ export function NamespaceDrawing() {
         sizeRoutes();
         const resize = new ResizeObserver(sizeRoutes);
         resize.observe(drawing);
-        const reduce = () => {
-            if (!motion.matches) return;
-            complete = true;
-            animations.forEach((animation) => animation.cancel());
-            drawing.dataset.namespaceState = "complete";
-        };
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (complete) return;
-                const visible = entry.isIntersecting;
-                drawing.dataset.namespaceState = visible ? "drawing" : "waiting";
-                animations.forEach((animation) => {
-                    if (animation.playState === "finished") return;
-                    if (visible) animation.play();
-                    else animation.pause();
-                });
-            },
-            { threshold: 0.2 },
-        );
-        observer.observe(drawing);
-        motion.addEventListener("change", reduce);
+        const stop = observeSceneActivity(drawing, ({ active, reducedMotion }) => {
+            if (reducedMotion) {
+                complete = true;
+                animations.forEach((animation) => animation.cancel());
+                drawing.dataset.namespaceState = "complete";
+            }
+            if (complete) return;
+            drawing.dataset.namespaceState = active ? "drawing" : "waiting";
+            animations.forEach((animation) => {
+                if (animation.playState === "finished") return;
+                if (active) animation.play();
+                else animation.pause();
+            });
+        });
         return () => {
-            observer.disconnect();
+            stop();
             resize.disconnect();
-            motion.removeEventListener("change", reduce);
             animations.forEach((animation) => animation.cancel());
             delete drawing.dataset.namespaceState;
         };

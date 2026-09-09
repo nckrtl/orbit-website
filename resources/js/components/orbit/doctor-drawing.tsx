@@ -1,9 +1,11 @@
+import { animateRouteSignal } from "./route-signal";
 import { useEffect, useRef } from "react";
 import { useMatchedPlanetRadius } from "./use-matched-planet-radius";
 import { hardwarePlane, hardwarePoint } from "./laptop";
 import { OrbitPlanet } from "./orbit-planet";
 import { TabBacking } from "./tab-backing";
 import type { Point } from "./object-scale";
+import { useSceneViewport } from "./use-scene-viewport";
 
 const axis = hardwarePoint(1, 0);
 const depthAxis = hardwarePoint(0, 1);
@@ -72,61 +74,17 @@ function diagnosticRoute(to: Point, left: boolean, port: number[]) {
 
 export function DoctorDrawing() {
     const ref = useRef<SVGSVGElement>(null);
+    useSceneViewport(ref, "0 0 860 400", "190 0 650 400");
     const radius = useMatchedPlanetRadius(ref);
     useEffect(() => {
         const scene = ref.current;
         if (!scene) return;
-        const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        const signal = scene.querySelector<SVGPathElement>("[data-doctor-signal]")!;
-        const routes = [...scene.querySelectorAll<SVGPathElement>("[data-doctor-route]")].map(
-            (path) => ({ path, length: path.getTotalLength() }),
+        return animateRouteSignal(
+            scene,
+            scene.querySelector<SVGPathElement>("[data-doctor-signal]")!,
+            [...scene.querySelectorAll<SVGPathElement>("[data-doctor-route]")],
+            { activityKey: "vitalsActive" },
         );
-        let visible = false;
-        let frame = 0;
-        let elapsed = 0;
-        let previous: number | null = null;
-        const paint = (time: number) => {
-            if (previous !== null) elapsed += time - previous;
-            previous = time;
-            const turn = Math.floor(elapsed / 2150);
-            const progress = Math.min(1, (elapsed % 2150) / 1800);
-            const { path, length } = routes[turn % routes.length];
-            const head = progress * length;
-            const tail = Math.max(0, head - 16);
-            // Follow bends with a short line, just like the private-network signals.
-            signal.setAttribute(
-                "d",
-                Array.from({ length: 9 }, (_, index) => {
-                    const point = path.getPointAtLength(tail + ((head - tail) * index) / 8);
-                    return `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`;
-                }).join(" "),
-            );
-            signal.dataset.route = path.dataset.doctorRoute;
-            signal.dataset.progress = String(progress);
-            signal.setAttribute("visibility", progress > 0 && progress < 1 ? "visible" : "hidden");
-            frame = requestAnimationFrame(paint);
-        };
-        const activity = () => {
-            cancelAnimationFrame(frame);
-            previous = null;
-            const active = visible && !document.hidden && !motion.matches;
-            scene.dataset.vitalsActive = String(active);
-            signal.setAttribute("visibility", "hidden");
-            if (active) frame = requestAnimationFrame(paint);
-        };
-        const observer = new IntersectionObserver((entries) => {
-            visible = entries[entries.length - 1].isIntersecting;
-            activity();
-        });
-        observer.observe(scene);
-        motion.addEventListener("change", activity);
-        document.addEventListener("visibilitychange", activity);
-        return () => {
-            cancelAnimationFrame(frame);
-            observer.disconnect();
-            motion.removeEventListener("change", activity);
-            document.removeEventListener("visibilitychange", activity);
-        };
     }, []);
 
     return (

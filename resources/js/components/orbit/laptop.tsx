@@ -1,6 +1,8 @@
+import { observeSceneActivity } from "./animation";
 import { useEffect, useRef, useState } from "react";
 import { objectTransform, scalePoint } from "./object-scale";
-import { laptopCloseStart, storyEntranceEnd } from "./story-entrance";
+import { laptopCloseStart, storyEntranceEnd, storyLayoutBounds } from "./story-entrance";
+import { useSceneViewport } from "./use-scene-viewport";
 
 type Phase = "running" | "closing" | "sleeping" | "opening";
 const width = 300;
@@ -494,6 +496,7 @@ function PreviewDevice({ kind, phase }: { kind: "phone" | "tablet"; phase: Phase
 export function Laptop() {
     const [phase, setPhase] = useState<Phase>("running");
     const sceneRef = useRef<SVGSVGElement>(null);
+    useSceneViewport(sceneRef, "0 0 740 755", "90 80 560 640", "20 60 710 665");
     const lidRef = useRef<SVGGElement>(null);
     const faceRef = useRef<SVGGElement>(null);
     const backRef = useRef<SVGRectElement>(null);
@@ -502,6 +505,14 @@ export function Laptop() {
     const frontFacingRef = useRef(initialLid.frontFacing);
     const active = phase === "running";
     const closed = phase === "closing" || phase === "sleeping";
+
+    useEffect(() => {
+        const scene = sceneRef.current;
+        if (!scene) return;
+        return observeSceneActivity(scene, ({ active }) => {
+            scene.dataset.motionActive = String(active);
+        });
+    }, []);
 
     // The reader owns the timeline. Hold the lid open after the entrance,
     // then close it over a later stretch of scroll.
@@ -529,6 +540,7 @@ export function Laptop() {
         let distance = 1;
         let revealStart = 0;
         let revealDistance = 1;
+        let revealRate = 2;
         let exitStart = 0;
         let exitDistance = 1;
         let previousOpacity = -1;
@@ -539,12 +551,13 @@ export function Laptop() {
             frame = 0;
             if (disposed) return;
             if (dirty) {
-                const bounds = scene.getBoundingClientRect();
+                const bounds = storyLayoutBounds(scene);
                 const revealEnd = storyEntranceEnd(bounds, window.scrollY, window.innerHeight);
                 start = laptopCloseStart(bounds, window.scrollY, window.innerHeight);
                 distance = Math.max(180, bounds.height * 0.42);
                 revealStart = revealEnd - Math.max(180, window.innerHeight * 0.3) + 40;
                 revealDistance = revealEnd - revealStart;
+                revealRate = window.innerWidth <= 1100 ? 4 : 2;
                 // Keep the illustration crisp through the lid closure, then
                 // dissolve it as it leaves the viewport above the connection.
                 exitStart = Math.max(
@@ -570,8 +583,9 @@ export function Laptop() {
             const exiting = motion.matches
                 ? 0
                 : Math.max(0, Math.min(1, (window.scrollY - exitStart) / exitDistance));
-            // Finish the fade and blur halfway through the entrance interval.
-            const opacity = Math.min(1, reveal * 2) * (1 - exiting);
+            // Compact scenes sharpen in a quarter of the entrance interval,
+            // giving the reader more time with the open laptop fully visible.
+            const opacity = Math.min(1, reveal * revealRate) * (1 - exiting);
             if (opacity !== previousOpacity) {
                 entrance.style.setProperty("--laptop-layer-opacity", String(opacity));
                 entrance.style.setProperty(
@@ -662,6 +676,7 @@ export function Laptop() {
             <svg
                 ref={sceneRef}
                 data-laptop
+                data-motion-active="false"
                 data-phase={phase}
                 data-run={active ? "1" : "0"}
                 className="orbit-laptop-scene"

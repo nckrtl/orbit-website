@@ -4,19 +4,19 @@ import { OrbitHomepage } from "@/components/orbit/homepage";
 export default function Home({ orbitUrl }: { orbitUrl: string }) {
     return (
         <>
-            <Head title="Run your apps on your own infrastructure">
+            <Head title="Build your ideas on machines you own">
                 <meta
                     name="description"
-                    content="Orbit is one CLI for development machines, staging nodes, and the applications on your own infrastructure."
+                    content="Orbit turns the machines you already own into an always-on development network, run by your agent and reachable from every device you carry."
                 />
                 <meta name="theme-color" content="#050506" />
                 <meta
                     property="og:title"
-                    content="Orbit — Run your apps on your own infrastructure"
+                    content="Orbit — Build your ideas on machines you own, run by your agent"
                 />
                 <meta
                     property="og:description"
-                    content="One CLI for development machines, staging nodes, and the applications on your own infrastructure."
+                    content="An always-on development network on your own machines, provisioned, routed, and repaired by your agent."
                 />
                 <meta property="og:type" content="website" />
             </Head>

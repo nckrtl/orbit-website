@@ -9,6 +9,7 @@ import { OnlineDevice } from "./server-scene";
 import { WireGuardMark } from "./wireguard-mark";
 import { usePrivateNetworkSignal } from "./private-network-signal";
 import type { Point } from "./object-scale";
+import { useSceneViewport } from "./use-scene-viewport";
 
 const coin: Point = [335, 150];
 const nodeWall = deviceWall(48, 48, 5, 25);
@@ -56,6 +57,7 @@ function connection(to: Point, index: number) {
 
 export function PrivateNetwork() {
     const ref = usePrivateNetworkSignal();
+    useSceneViewport(ref, "-40 0 720 280", "180 -10 460 310", "-10 -10 680 310");
 
     return (
         <svg

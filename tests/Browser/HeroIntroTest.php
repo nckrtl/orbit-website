@@ -40,14 +40,28 @@ it('brings the navigation into focus promptly without moving', function (int $wi
         });
         animation.finish();
         const end = header.getBoundingClientRect().top;
-        return hidden && initiallySoft && duration >= 1600 && duration <= 2000 && start === end && end === 0 && getComputedStyle(header).opacity === "1"
+        return hidden && initiallySoft && (innerWidth<=1100 ? duration===700 : duration>=1600 && duration<=2000) && start === end && end === 0 && getComputedStyle(header).opacity === "1"
             && samples[2].filter === "none" && getComputedStyle(header).filter === "none"
             && samples.every(sample => Math.abs(sample.opacity - sample.progress) < 0.01
                 && Math.abs(sample.top - (start + (end - start) * sample.progress)) < 0.1)
             && header.querySelectorAll("a").length === 5
             && header.getAnimations({subtree: true}).length === 1;
     }', true);
-    $page->click('Get started')->assertScript('location.hash', '#install');
+    if ($width <= 1100) {
+        $page->click('[aria-label="Open navigation menu"]')->click('[aria-label="Mobile navigation"] a[href="#install"]');
+    } else {
+        $page->click('Get started');
+    }
+    $page->assertScript('location.hash', '#install');
+    if ($width <= 1100) {
+        $page->assertScript('() => {
+            const target = document.querySelector("#install");
+            const targetY = scrollY + target.getBoundingClientRect().top - parseFloat(getComputedStyle(target).scrollMarginTop);
+            const end = Math.min(targetY, document.documentElement.scrollHeight - innerHeight);
+            return Math.abs(scrollY - end) < 2;
+        }', true);
+        $page->script('scrollBy({top:-32,behavior:"instant"})');
+    }
     $page->assertScript('() => {
         const header = document.querySelector(".orbit-story-header");
         return header.getBoundingClientRect().top === 0 && getComputedStyle(header).opacity === "1";
@@ -165,6 +179,7 @@ it('softens fast scroll changes and finishes the hero exit at the story entrance
         const start = Number(content.dataset.exitStart);
         const end = Number(content.dataset.exitEnd);
         const bounds = copy.getBoundingClientRect();
+        bounds.y -= new DOMMatrix(getComputedStyle(copy.closest(".orbit-story-chapter__grid")).transform).m42;
         const copyStart = bounds.height + 128 > innerHeight
             ? bounds.top + scrollY - innerHeight + 80
             : bounds.top + scrollY + bounds.height / 2 - innerHeight * 0.85;
@@ -298,16 +313,29 @@ it('lets the whole constellation follow the scroll visibly and fade with the int
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => [2083, false], 'mobile' => [390, false], 'reduced desktop' => [2083, true], 'reduced mobile' => [390, true]]);
 
-it('blurs the page behind the full fixed navigation after scrolling', function (int $width, bool $reduced) {
+it('fades the navigation backdrop in on scroll and clears it at the top', function (int $width, bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
+    $page->assertScript('() => {
+        const header = document.querySelector(".orbit-story-header");
+        const wash = header.querySelector(".orbit-story-header__wash");
+        return scrollY === 0 && getComputedStyle(header).backdropFilter === "none"
+            && getComputedStyle(header).backgroundColor === "rgba(0, 0, 0, 0)"
+            && getComputedStyle(wash).opacity === "0";
+    }', true);
+    $page->script('window.scrollTo({top:1,behavior:"instant"})');
+    $page->assertScript('getComputedStyle(document.querySelector(".orbit-story-header__wash")).opacity', '1');
     $page->script('document.querySelector(".orbit-owned-machine").scrollIntoView({block:"start",behavior:"instant"})');
     $page->assertScript('() => {
         const header=document.querySelector(".orbit-story-header"), wash=header.querySelector(".orbit-story-header__wash");
         const bounds=header.getBoundingClientRect(), style=getComputedStyle(header);
-        return bounds.top===0 && bounds.left===0 && Math.abs(bounds.width-innerWidth)<.1
+        return (innerWidth<=1100 ? bounds.bottom<=.1 : bounds.top===0) && bounds.left===0 && Math.abs(bounds.width-innerWidth)<.1
             && style.opacity==="1" && style.filter==="none"
             && style.backdropFilter.includes("blur(14px)")
             && getComputedStyle(wash).opacity==="1"
             && header.querySelectorAll("a").length===5;
-    }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
+    }', true);
+    $page->script('window.scrollTo({top:0,behavior:"instant"})');
+    $page->assertScript('getComputedStyle(document.querySelector(".orbit-story-header__wash")).opacity', '0')
+        ->assertScript('getComputedStyle(document.querySelector(".orbit-story-header")).backdropFilter', 'none')
+        ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => [2135, false], 'mobile' => [390, false], 'reduced motion' => [2135, true]]);

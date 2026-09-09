@@ -1,8 +1,65 @@
 <?php
 
+it('drifts each story heading and illustration down together during their entrance', function (int $width, int $height, bool $reduced, string $chapter) {
+    $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, $height);
+    $page->assertScript('Boolean(document.querySelector("[data-chapter='.$chapter.'] .orbit-story-chapter__grid").dataset.parallaxEnd)', true);
+    $page->assertScript('async () => {
+        await document.fonts.ready;
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
+        const section=document.querySelector("[data-chapter='.$chapter.']");
+        const grid=section.querySelector(".orbit-story-chapter__grid");
+        const heading=section.querySelector("h2");
+        const illustration=section.querySelector("[data-story-enter=visual]");
+        const next=section.nextElementSibling ?? document.querySelector(".orbit-capabilities");
+        const port=illustration.querySelector("[data-handoff-target], [data-growth-target]");
+        const route=port ? document.querySelector(section.dataset.chapter==="premise" ? "[data-handoff-route] [data-route-path]" : "[data-growth-route] [data-route-path]") : null;
+        const reduced=matchMedia("(prefers-reduced-motion:reduce)").matches;
+        const start=Number(grid.dataset.parallaxStart), end=Number(grid.dataset.parallaxEnd);
+        const sample=async progress=>{
+            scrollTo({top:start+(end-start)*progress+(progress===0?-2:progress===1?2:0),behavior:"instant"});
+            await new Promise(requestAnimationFrame);
+            await new Promise(requestAnimationFrame);
+            const endpoint=route?.getPointAtLength(route.getTotalLength()).matrixTransform(route.getScreenCTM());
+            const target=port ? new DOMPoint(port.cx.baseVal.value,port.cy.baseVal.value).matrixTransform(port.getScreenCTM()) : null;
+            return {
+                titleY:heading.getBoundingClientRect().top+scrollY,
+                artY:illustration.getBoundingClientRect().top+scrollY,
+                nextY:next.getBoundingClientRect().top+scrollY,
+                height:document.documentElement.scrollHeight,
+                offset:new DOMMatrix(getComputedStyle(grid).transform).m42,
+                opacity:Number(getComputedStyle(heading).opacity),
+                connected:!endpoint || Math.hypot(endpoint.x-target.x,endpoint.y-target.y)<1,
+            };
+        };
+        const settled=await sample(1);
+        if(settled.opacity!==1 || getComputedStyle(section.querySelector("[data-laptop-entrance]") ?? illustration).opacity!=="1") return false;
+        for(const progress of [0,.25,.5,.75,1,.5,0]) {
+            const state=await sample(progress);
+            const travel=reduced?0:80*(1-progress);
+            if(Math.abs(state.titleY-settled.titleY+travel)>1
+                || Math.abs(state.artY-settled.artY+travel)>1
+                || Math.abs(state.offset+travel)>1
+                || Math.abs(state.nextY-settled.nextY)>1
+                || state.height!==settled.height
+                || !state.connected
+                || (progress===0 && start>0 && !reduced && state.opacity!==0)) return false;
+        }
+        await sample(.5);
+        const before={start:Number(grid.dataset.parallaxStart),end:Number(grid.dataset.parallaxEnd),artStart:Number(illustration.dataset.revealStart)};
+        dispatchEvent(new Event("resize"));
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
+        return Math.abs(Number(grid.dataset.parallaxStart)-before.start)<1
+            && Math.abs(Number(grid.dataset.parallaxEnd)-before.end)<1
+            && Math.abs(Number(illustration.dataset.revealStart)-before.artStart)<1
+            && document.documentElement.scrollWidth<=innerWidth;
+    }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
+})->with(['annotated desktop' => [1386, 1204], 'tablet' => [820, 1180], 'phone' => [420, 818]])->with(['motion' => false, 'reduced motion' => true])->with(['problem', 'premise', 'topology']);
+
 it('fades and sharpens story illustrations in place and reverses with scrolling', function (int $width, string $chapter) {
     $page = visit('/')->resize($width, 1000);
-    foreach ([0, .25, .5, 1, .5, .25, 0] as $progress) {
+    foreach ([0, .125, .25, .5, 1, .5, .25, .125, 0] as $progress) {
         $page->script('() => {
             const section=document.querySelector("[data-chapter='.$chapter.']");
             const scene=section.querySelector("[data-laptop]") ?? section.querySelector("[data-story-enter=visual]");
@@ -14,16 +71,17 @@ it('fades and sharpens story illustrations in place and reverses with scrolling'
             const section=document.querySelector("[data-chapter='.$chapter.']");
             const art=section.querySelector("[data-laptop-entrance]") ?? section.querySelector("[data-story-enter=visual]");
             const style=getComputedStyle(art);
-            const opacity=Math.min(1,'.$progress.'*2);
+            const rate=innerWidth<=1100 && ["problem", "premise"].includes(section.dataset.chapter) ? 4 : 2;
+            const opacity=Math.min(1,'.$progress.'*rate);
             return Math.abs(Number(style.opacity)-opacity)<.01
-                && Math.abs(parseFloat(style.filter.match(/[\\d.]+/)?.[0] ?? "0")-6*(1-opacity))<.06
+                && Math.abs(parseFloat(style.filter.match(/[\\d.]+/)?.[0] ?? "0")-(innerWidth<=1100?2:6)*(1-opacity))<.06
                 && style.transform==="none"
                 && style.animationName==="none" && style.maskImage==="none"
                 && document.documentElement.scrollWidth<=innerWidth;
         }', true);
     }
     $page->assertNoJavaScriptErrors()->assertNoConsoleLogs();
-})->with(['desktop' => 2083, 'mobile' => 390])->with(['problem', 'premise', 'topology']);
+})->with(['desktop' => 2083, 'mobile' => 390, 'tablet' => 820])->with(['problem', 'premise', 'topology']);
 
 it('keeps story copy aligned in normal flow and reverses its entrance and exit fades', function (int $width, int $height, string $chapter) {
     $page = visit('/')->resize($width, $height);
@@ -33,17 +91,27 @@ it('keeps story copy aligned in normal flow and reverses its entrance and exit f
         const section = document.querySelector("[data-chapter='.$chapter.']");
         const grid = section.querySelector(".orbit-story-chapter__grid");
         const copy = section.querySelector("[data-story-enter=copy]");
+        const copyBounds=()=>{
+            const rects=getComputedStyle(copy).display==="contents"
+                ? [...copy.querySelectorAll("[data-story-copy-part]")].map(el=>el.getBoundingClientRect())
+                : [copy.getBoundingClientRect()];
+            const drift=new DOMMatrix(getComputedStyle(copy.closest(".orbit-story-chapter__grid")).transform).m42;
+            const top=Math.min(...rects.map(r=>r.top))-drift, bottom=Math.max(...rects.map(r=>r.bottom))-drift;
+            return {top,bottom,height:bottom-top};
+        };
         const visual = section.querySelector("[data-story-enter=visual]");
         const network = document.querySelector("[data-hero-network]");
         const artwork = visual.getBoundingClientRect();
+        artwork.y -= new DOMMatrix(getComputedStyle(grid).transform).m42;
         const pinAt = artwork.top + scrollY + artwork.height / 2 - innerHeight / 2;
         const gridHeight = grid.getBoundingClientRect().height;
         const sample = async top => {
             scrollTo({top, behavior:"instant"});
             await new Promise(requestAnimationFrame);
             await new Promise(requestAnimationFrame);
-            const rect = copy.getBoundingClientRect();
+            const rect = copyBounds();
             const art = visual.getBoundingClientRect();
+            art.y -= new DOMMatrix(getComputedStyle(grid).transform).m42;
             const parts = [...copy.querySelectorAll("[data-story-copy-part]")].map(el => getComputedStyle(el));
             return {
                 center:rect.top + rect.height / 2,
@@ -102,7 +170,15 @@ it('keeps long story copy readable in normal flow before fading its last lines n
     $page->assertScript('async () => {
         await document.fonts.ready;
         const copy=document.querySelector("[data-chapter='.$chapter.'] [data-story-enter=copy]");
-        const bottom=copy.getBoundingClientRect().bottom+scrollY;
+        const copyBounds=()=>{
+            const rects=getComputedStyle(copy).display==="contents"
+                ? [...copy.querySelectorAll("[data-story-copy-part]")].map(el=>el.getBoundingClientRect())
+                : [copy.getBoundingClientRect()];
+            const drift=new DOMMatrix(getComputedStyle(copy.closest(".orbit-story-chapter__grid")).transform).m42;
+            const top=Math.min(...rects.map(r=>r.top))-drift, bottom=Math.max(...rects.map(r=>r.bottom))-drift;
+            return {top,bottom,height:bottom-top};
+        };
+        const bottom=copyBounds().bottom+scrollY;
         const sample=async top => {
             scrollTo({top,behavior:"instant"});
             await new Promise(requestAnimationFrame);
@@ -110,7 +186,7 @@ it('keeps long story copy readable in normal flow before fading its last lines n
             const style=getComputedStyle(copy);
             const parts=[...copy.querySelectorAll("[data-story-copy-part]")];
             const opacity=parts.reduce((sum,el)=>sum+Number(getComputedStyle(el).opacity),0)/parts.length;
-            return {bottom:copy.getBoundingClientRect().bottom,opacity,position:style.position,inert:copy.inert};
+            return {bottom:copyBounds().bottom,opacity,position:style.position,inert:copy.inert};
         };
         const readable=await sample(bottom-innerHeight*0.5);
         const fading=await sample(bottom-(innerHeight*0.4+64)/2);
@@ -131,12 +207,21 @@ it('fades the intro constellation at the problem entrance on mobile and with red
         await document.fonts.ready;
         const section=document.querySelector("[data-chapter=problem]");
         const copy=section.querySelector("[data-story-enter=copy]");
+        const copyBounds=()=>{
+            const rects=getComputedStyle(copy).display==="contents"
+                ? [...copy.querySelectorAll("[data-story-copy-part]")].map(el=>el.getBoundingClientRect())
+                : [copy.getBoundingClientRect()];
+            const drift=new DOMMatrix(getComputedStyle(copy.closest(".orbit-story-chapter__grid")).transform).m42;
+            const top=Math.min(...rects.map(r=>r.top))-drift, bottom=Math.max(...rects.map(r=>r.bottom))-drift;
+            return {top,bottom,height:bottom-top};
+        };
         const art=section.querySelector("[data-story-enter=visual]").getBoundingClientRect();
+        art.y-=new DOMMatrix(getComputedStyle(copy.closest(".orbit-story-chapter__grid")).transform).m42;
         const network=document.querySelector("[data-hero-network]");
-        const pinned=matchMedia("(min-width:1024px) and (min-height:600px)").matches && copy.getBoundingClientRect().height+128<=innerHeight;
+        const pinned=matchMedia("(min-width:1024px) and (min-height:600px)").matches && copyBounds().height+128<=innerHeight;
         const reduced=matchMedia("(prefers-reduced-motion:reduce)").matches;
         const start=pinned ? art.top + scrollY + art.height/2 - innerHeight*0.85
-            : copy.getBoundingClientRect().top + scrollY - innerHeight + 80;
+            : copyBounds().top + scrollY - innerHeight + 80;
         const distance=innerHeight * (pinned ? 0.35 : 0.25);
         const sample=async top => {
             scrollTo({top,behavior:"instant"});
@@ -155,7 +240,7 @@ it('fades the intro constellation at the problem entrance on mobile and with red
 
 it('waits for mobile illustrations to enter view and handles a desktop resize', function () {
     $page = visit('/')->resize(390, 700);
-    $page->script('document.querySelector("[data-chapter=problem] [data-story-enter=copy]").scrollIntoView({block:"end",behavior:"instant"})');
+    $page->script('document.querySelector("[data-chapter=problem] h2").scrollIntoView({block:"end",behavior:"instant"})');
     $page->assertAttribute('[data-chapter=problem] [data-story-enter=copy]', 'data-enter-state', 'visible')
         ->assertAttribute('[data-chapter=problem] [data-story-enter=visual]', 'data-enter-state', 'waiting');
     $page->resize(1440, 1000)
@@ -175,6 +260,32 @@ it('shows every story section immediately with reduced motion', function () {
             &&getComputedStyle(el).filter==="none"&&getComputedStyle(el).opacity==="1"&&getComputedStyle(el).animationName==="none"&&getComputedStyle(el).transform==="none");
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
+
+it('departs toward topology as the Gateway passes the viewport midpoint', function (int $width) {
+    $page = visit('/')->resize($width, 1204);
+    $page->assertScript('Boolean(document.querySelector("[data-growth-route]").dataset.scrollStart)', true);
+
+    foreach ([1204, 900] as $height) {
+        $page->resize($width, $height);
+        foreach ([-20, 40, -20] as $offset) {
+            $page->script('() => {
+                const element=document.querySelector("[data-handoff-scene]");
+                const scene=element.getBoundingClientRect();
+                scene.y-=new DOMMatrix(getComputedStyle(element.closest(".orbit-story-chapter__grid")).transform).m42;
+                scrollTo({top:scrollY+scene.top+scene.height/2-innerHeight/2+'.$offset.',behavior:"instant"});
+            }');
+            $page->assertScript('() => {
+                const route=document.querySelector("[data-growth-route]");
+                const active='.$offset.'>0;
+                return (Number(route.dataset.progress)>0)===active
+                    && getComputedStyle(route.querySelector("[data-route-trail]")).opacity===(active?"1":"0")
+                    && getComputedStyle(route.querySelector("[data-route-pulse]")).opacity===(active?"1":"0");
+            }', true);
+        }
+    }
+
+    $page->assertNoJavaScriptErrors()->assertNoConsoleLogs();
+})->with(['desktop' => 1429, 'mobile' => 390]);
 
 it('finishes each inter-section signal at the end of its destination entrance interval', function (int $width, string $chapter, string $route, string $target) {
     $page = visit('/')->resize($width, 1000);
@@ -233,7 +344,7 @@ it('blurs the remaining illustrations out and restores them on reverse scrolling
             const opacity=reduced ? 1 : 1-'.$progress.';
             const blur=parseFloat(style.filter.match(/[\\d.]+/)?.[0] ?? "0");
             return Math.abs(Number(style.opacity)-opacity)<.01
-                && Math.abs(blur-6*(1-opacity))<.03
+                && Math.abs(blur-(innerWidth<=1100?2:6)*(1-opacity))<.03
                 && (opacity!==1 || style.filter==="none")
                 && art.inert===(opacity===0)
                 && new DOMMatrix(style.transform).m41===0;
@@ -248,9 +359,17 @@ it('staggers the label then heading then body on both scroll entry and exit', fu
     $page->assertScript('async () => {
         await document.fonts.ready;
         const copy=document.querySelector("[data-chapter='.$chapter.'] [data-story-enter=copy]");
+        const copyBounds=()=>{
+            const rects=getComputedStyle(copy).display==="contents"
+                ? [...copy.querySelectorAll("[data-story-copy-part]")].map(el=>el.getBoundingClientRect())
+                : [copy.getBoundingClientRect()];
+            const drift=new DOMMatrix(getComputedStyle(copy.closest(".orbit-story-chapter__grid")).transform).m42;
+            const top=Math.min(...rects.map(r=>r.top))-drift, bottom=Math.max(...rects.map(r=>r.bottom))-drift;
+            return {top,bottom,height:bottom-top};
+        };
         const parts=[...copy.querySelectorAll("[data-story-copy-part]")];
         if(parts.map(el=>el.dataset.storyCopyPart).join(",")!=="label,title,body") return false;
-        const bounds=copy.getBoundingClientRect();
+        const bounds=copyBounds();
         const center=bounds.top+scrollY+bounds.height/2;
         const compact=innerWidth<1024||innerHeight<600||bounds.height+128>innerHeight;
         const enter=compact ? bounds.top+scrollY-innerHeight+80 : center-innerHeight*.85;
@@ -286,7 +405,7 @@ it('staggers the label then heading then body on both scroll entry and exit', fu
         const reverseIn=await sample(enter+enterDistance*.5);
         const hiddenAgain=await sample(enter-10);
         return equal(reverseOut,midOut)&&equal(reverseIn,midIn)&&equal(hiddenAgain,hidden)
-            &&Math.abs(copy.getBoundingClientRect().height-bounds.height)<1
+            &&Math.abs(copyBounds().height-bounds.height)<1
             &&parts.every(el=>getComputedStyle(el).transform==="none")
             &&document.documentElement.scrollWidth<=innerWidth;
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();

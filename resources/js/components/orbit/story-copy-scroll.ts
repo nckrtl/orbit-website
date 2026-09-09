@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import { storyCopyEntranceStart, storyEntranceEnd } from "./story-entrance";
+import {
+    storyCopyBounds,
+    storyCopyEntranceStart,
+    storyEntranceEnd,
+    storyLayoutBounds,
+} from "./story-entrance";
 
 export function useStoryCopyScroll() {
     const ref = useRef<HTMLDivElement>(null);
@@ -14,6 +19,10 @@ export function useStoryCopyScroll() {
                 ? [
                       {
                           section,
+                          lastPaint: "",
+                          grid: section.querySelector<HTMLElement>(".orbit-story-chapter__grid"),
+                          parallaxAt: 0,
+                          parallaxDistance: 1,
                           copy,
                           parts: Array.from(
                               copy.querySelectorAll<HTMLElement>("[data-story-copy-part]"),
@@ -21,6 +30,7 @@ export function useStoryCopyScroll() {
                           visual,
                           artAt: 0,
                           artDistance: 1,
+                          artRate: 2,
                           artExitAt: 0,
                           artExitDistance: 1,
                           enterAt: 0,
@@ -39,26 +49,52 @@ export function useStoryCopyScroll() {
         const motion = matchMedia("(prefers-reduced-motion: reduce)");
         let frame = 0;
         let stagger = 0;
+        let parallaxTravel = 0;
         const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
         const paint = () => {
             frame = 0;
-            for (const {
-                section,
-                copy,
-                parts,
-                visual,
-                artAt,
-                artDistance,
-                artExitAt,
-                artExitDistance,
-                enterAt,
-                enterDistance,
-                exitAt,
-                exitDistance,
-            } of chapters) {
+            for (const chapter of chapters) {
+                const {
+                    section,
+                    grid,
+                    parallaxAt,
+                    parallaxDistance,
+                    copy,
+                    parts,
+                    visual,
+                    artAt,
+                    artDistance,
+                    artRate,
+                    artExitAt,
+                    artExitDistance,
+                    enterAt,
+                    enterDistance,
+                    exitAt,
+                    exitDistance,
+                } = chapter;
                 const entering = clamp((scrollY - enterAt) / enterDistance);
                 const exiting = clamp((scrollY - exitAt) / exitDistance);
+                const signature = [
+                    entering,
+                    exiting,
+                    clamp((scrollY - parallaxAt) / parallaxDistance),
+                    clamp((scrollY - artAt) / artDistance),
+                    clamp((scrollY - artExitAt) / artExitDistance),
+                    motion.matches,
+                ].join(",");
+                // Settled/offscreen chapters don't invalidate styles during every scroll.
+                if (signature === chapter.lastPaint) continue;
+                chapter.lastPaint = signature;
+                if (grid) {
+                    const progress = motion.matches
+                        ? 1
+                        : clamp((scrollY - parallaxAt) / parallaxDistance);
+                    grid.style.setProperty(
+                        "--story-entry-offset",
+                        `${-parallaxTravel * (1 - progress)}px`,
+                    );
+                }
                 // Stagger inside the existing intervals so the body is fully
                 // readable at the same point, and all copy exits on time.
                 const duration = 1 - stagger * (parts.length - 1);
@@ -92,7 +128,7 @@ export function useStoryCopyScroll() {
                     const progress = motion.matches ? 1 : clamp((scrollY - artAt) / artDistance);
                     const artOpacity = motion.matches
                         ? 1
-                        : clamp(progress * 2) *
+                        : clamp(progress * artRate) *
                           (1 - clamp((scrollY - artExitAt) / artExitDistance));
                     visual.style.setProperty("--story-art-opacity", String(artOpacity));
                     visual.inert = artOpacity === 0;
@@ -114,8 +150,12 @@ export function useStoryCopyScroll() {
             stagger = parseFloat(
                 getComputedStyle(chapters[0].copy).getPropertyValue("--step-story-copy"),
             );
+            parallaxTravel = parseFloat(
+                getComputedStyle(chapters[0].section).getPropertyValue("--distance-story-parallax"),
+            );
             for (const chapter of chapters) {
-                const bounds = chapter.copy.getBoundingClientRect();
+                chapter.lastPaint = "";
+                const bounds = storyCopyBounds(chapter.copy);
                 const center = bounds.top + scrollY + bounds.height / 2;
                 const compact = !desktop.matches || bounds.height + 128 > height;
                 // Keep long, stacked copy readable until its last lines approach the top.
@@ -126,10 +166,13 @@ export function useStoryCopyScroll() {
                     : center - height * 0.3;
                 chapter.exitDistance = compact ? Math.max(1, height * 0.4 - 64) : height * 0.3;
                 if (chapter.visual) {
-                    const art = chapter.visual.getBoundingClientRect();
+                    const art = storyLayoutBounds(chapter.visual);
                     const end = storyEntranceEnd(art, scrollY, height);
                     chapter.artDistance = Math.max(180, height * 0.3) - 40;
                     chapter.artAt = end - chapter.artDistance;
+                    // Give the compact Gateway the same quicker fade as the laptop.
+                    chapter.artRate =
+                        innerWidth <= 1100 && chapter.section.dataset.chapter === "premise" ? 4 : 2;
                     // Hold the illustration sharp until it approaches the top.
                     chapter.artExitAt = art.bottom + scrollY - height * 0.35;
                     chapter.artExitDistance = Math.max(140, height * 0.3);
@@ -139,6 +182,18 @@ export function useStoryCopyScroll() {
                     );
                     chapter.visual.dataset.revealStart = String(chapter.artAt);
                     chapter.visual.dataset.revealEnd = String(end);
+                    if (chapter.grid) {
+                        chapter.parallaxAt = Math.max(0, Math.min(chapter.enterAt, chapter.artAt));
+                        chapter.parallaxDistance = Math.max(
+                            1,
+                            Math.max(chapter.enterAt + chapter.enterDistance, end) -
+                                chapter.parallaxAt,
+                        );
+                        chapter.grid.dataset.parallaxStart = String(chapter.parallaxAt);
+                        chapter.grid.dataset.parallaxEnd = String(
+                            chapter.parallaxAt + chapter.parallaxDistance,
+                        );
+                    }
                 }
             }
             schedule();
@@ -166,8 +221,13 @@ export function useStoryCopyScroll() {
             window.removeEventListener("pageshow", measure);
             desktop.removeEventListener("change", measure);
             motion.removeEventListener("change", schedule);
-            for (const { section, copy, parts, visual } of chapters) {
+            for (const { section, grid, copy, parts, visual } of chapters) {
                 section.removeAttribute("data-story-scroll");
+                if (grid) {
+                    grid.style.removeProperty("--story-entry-offset");
+                    delete grid.dataset.parallaxStart;
+                    delete grid.dataset.parallaxEnd;
+                }
                 for (const part of parts) {
                     part.style.removeProperty("--story-part-opacity");
                     part.style.removeProperty("--story-part-filter");

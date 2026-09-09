@@ -3,7 +3,7 @@
 it('shows a stethoscope diagnosing configuration drift and fleet vitals', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
     $page->script('document.querySelector("[data-capability=doctor]").scrollIntoView({block:"center",behavior:"instant"})');
-    $page->assertSee('Keep your fleet healthy with Orbit Doctor.')
+    $page->assertSee('Orbit Doctor compares what the Gateway expects with what each node actually runs, and reports every difference, next to CPU and memory.')
         ->assertScript('() => {
             const card = document.querySelector("[data-capability=doctor]");
             const scene = card.querySelector("svg");
@@ -18,7 +18,7 @@ it('shows a stethoscope diagnosing configuration drift and fleet vitals', functi
             const earpiece = scene.querySelector("[data-doctor-earpieces] .orbit-doctor__earpiece").getBoundingClientRect();
             return Math.abs((globe.left + globe.right - chest.left - chest.right) / 2) < .1
                 && globe.bottom < chest.top
-                && Math.abs((chest.left + chest.right - bounds.left - bounds.right) / 2) < 1
+                && (innerWidth<=600 || Math.abs((chest.left + chest.right - bounds.left - bounds.right) / 2) < 1)
                 && earpiece.left > chest.right
                 && nodes.some(node => node.getBoundingClientRect().right < chest.left)
                 && nodes.some(node => node.getBoundingClientRect().left > chest.right)
@@ -38,7 +38,7 @@ it('shows a stethoscope diagnosing configuration drift and fleet vitals', functi
                 })
                 && hardware.every(element => {
                     const box = element.getBoundingClientRect();
-                    return box.left >= bounds.left && box.right <= bounds.right
+                    return (innerWidth<=600 || box.left >= bounds.left && box.right <= bounds.right)
                         && box.top >= bounds.top && box.bottom <= bounds.bottom;
                 })
                 && [...scene.querySelectorAll("path,rect,circle,ellipse")].every(shape => {
@@ -46,7 +46,7 @@ it('shows a stethoscope diagnosing configuration drift and fleet vitals', functi
                     return style.stroke === "none" || (style.strokeWidth === "1px" && style.vectorEffect === "non-scaling-stroke");
                 })
                 && getComputedStyle(scene).maskImage !== "none"
-                && bounds.bottom <= card.querySelector("h3").getBoundingClientRect().top
+                && (innerWidth>600 && innerWidth<=900 ? bounds.right < card.querySelector("h3").getBoundingClientRect().left : bounds.bottom <= card.querySelector("h3").getBoundingClientRect().top)
                 && document.documentElement.scrollWidth <= innerWidth;
         }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['annotated desktop' => 2135, 'tablet' => 768, 'mobile' => 390]);
@@ -160,9 +160,9 @@ it('aligns the doctor illustration with the copy and routes connections on the s
         const tubeCenter=new DOMPoint((left.x+right.x)/2,0).matrixTransform(tube.getCTM());
         const chest=scene.querySelector("[data-doctor-chestpiece]").getBoundingClientRect();
         const ears=scene.querySelector("[data-doctor-earpieces]").getBoundingClientRect();
-        return aligned && Math.abs(bounds.left-copy.left)<1 && Math.abs(bounds.right-copy.right)<1
+        return aligned && (innerWidth<=600 ? getComputedStyle(card).overflow==="hidden" && bounds.left<copy.left && bounds.right>copy.right : Math.abs(bounds.left-copy.left)<1 && Math.abs(bounds.right-copy.right)<1
             && Math.abs(Math.min(...nodes.map(node=>node.left))-copy.left)<6
-            && Math.abs(Math.max(...nodes.map(node=>node.right))-copy.right)<6
+            && Math.abs(Math.max(...nodes.map(node=>node.right))-copy.right)<6)
             && Math.abs(tubeCenter.x-center.x)<.1
             && ears.top > chest.bottom+bounds.height*.06
             && !scene.querySelector("[data-doctor-earpieces] .orbit-doctor__detail");
@@ -177,16 +177,18 @@ it('sends a short signal outward to each diagnostic node in turn', function () {
             ->assertScript('async () => {
                 const signal=document.querySelector("[data-doctor-signal]");
                 const route=signal.dataset.route;
-                const before=Number(signal.dataset.progress);
+                const animation=signal.getAnimations()[0];
+                const before=Number(animation.currentTime)/1800;
                 await new Promise(resolve=>setTimeout(resolve,150));
-                const after=Number(signal.dataset.progress);
+                const after=Number(animation.currentTime)/1800;
                 const path=document.querySelector(`[data-doctor-route=${route}]`);
-                const head=signal.getPointAtLength(signal.getTotalLength());
-                const target=path.getPointAtLength(path.getTotalLength()*after);
+                const style=getComputedStyle(signal);
+                const dash=parseFloat(style.strokeDasharray);
+                const head=dash-parseFloat(style.strokeDashoffset);
                 return signal.dataset.route===route && after>before && after<1
-                    && signal.getAttribute("visibility")==="visible"
-                    && Math.hypot(head.x-target.x,head.y-target.y)<.1
-                    && signal.getTotalLength()<=16.1;
+                    && signal.getAttribute("visibility")==="visible" && Number(style.opacity)===1
+                    && signal.getAttribute("d")===path.getAttribute("d")
+                    && Math.abs(head-path.getTotalLength()*after)<.1 && dash===16;
             }', true);
     }
     $page->script('scrollTo({top:0,behavior:"instant"})');

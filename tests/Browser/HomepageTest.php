@@ -1,6 +1,6 @@
 <?php
 
-it('alternates the server scene and copy inside the wider story container', function (int $width) {
+it('composes the story for desktop columns and compact reading order', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
     $page->script('document.querySelector("[data-chapter=premise]").scrollIntoView({block:"center"})');
     $page->assertScript('() => {
@@ -14,21 +14,20 @@ it('alternates the server scene and copy inside the wider story container', func
             const art = section.querySelector(".orbit-story-chapter__visual").getBoundingClientRect();
             return innerWidth > 900
                 ? Math.abs(text.width / row.width - 0.4) < 0.001 && Math.abs(art.width / row.width - 0.6) < 0.001
-                : Math.abs(text.width - row.width) < 1 && text.bottom < art.top;
+                : section.querySelector("h2").getBoundingClientRect().bottom <= art.top && art.bottom <= section.querySelector("[data-story-copy-part=body]").getBoundingClientRect().top;
         });
         return Math.abs(grid.width - Math.min(innerWidth, 1600)) < 1
             && split
-            && (innerWidth > 900 ? visual.right <= copy.left + 1 : copy.bottom < visual.top)
+            && (innerWidth > 900 ? visual.right <= copy.left + 1 : chapter.querySelector("h2").getBoundingClientRect().bottom <= visual.top)
             && document.querySelectorAll("[data-handoff-scene] [data-server-node]").length === 1
             && chapter.querySelectorAll("[data-remote-device]").length === 3;
     }', true)->assertScript('() => {
         const element = document.querySelector("[data-chapter=premise] .orbit-story-chapter__copy");
-        const copy = element.getBoundingClientRect();
-        const padding = getComputedStyle(element);
+        const regions = innerWidth > 900 ? [element] : [...element.querySelectorAll("[data-story-copy-part]")];
         const route = document.querySelector("[data-handoff-path]");
         for(let d = 0; d < route.getTotalLength(); d += 4) {
             const p = route.getPointAtLength(d).matrixTransform(route.getScreenCTM());
-            if(p.x > copy.left + parseFloat(padding.paddingLeft) && p.x < copy.right - parseFloat(padding.paddingRight) && p.y > copy.top && p.y < copy.bottom) return false;
+            if(regions.some(region=>{ const copy=region.getBoundingClientRect(), padding=getComputedStyle(region); return p.x>copy.left+parseFloat(padding.paddingLeft) && p.x<copy.right-parseFloat(padding.paddingRight) && p.y>copy.top && p.y<copy.bottom; })) return false;
         }
         return true;
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
@@ -92,7 +91,7 @@ it('carries the story connection from the laptop to the central server after res
         const scene = root.getBoundingClientRect();
         return [...root.querySelectorAll("[data-remote-device], [data-server-node]")].every(element => {
             const box = element.getBoundingClientRect();
-            return box.left >= scene.left && box.right <= scene.right && box.top >= scene.top && box.bottom <= scene.bottom;
+            return (innerWidth<=600 || box.left >= scene.left && box.right <= scene.right) && box.top >= scene.top && box.bottom <= scene.bottom;
         });
     }', true)->assertScript('() => {
         const scene = document.querySelector("[data-handoff-scene]");
@@ -241,19 +240,19 @@ it('moves both ticked dividers left on downward scroll and reverses upward', fun
 it('renders the Orbit story homepage without javascript or console errors', function () {
     $page = visit('/', ['reducedMotion' => 'reduce']);
 
-    $page->assertSee('Develop your ideas faster on your own agent-run infra.')
+    $page->assertSee('Build your ideas on machines you own, run by your agent.')
         ->assertSee('Local development stops when your laptop does.')
         ->assertSee('Move the work. Keep the control.')
         ->assertSee('Start with one machine. Make room for what’s next.')
-        ->assertSee('Small details. A network that feels like yours.')
+        ->assertSee('What it takes to trust an agent with your fleet.')
         ->assertSee('Your favorite place to build.')
-        ->assertSee('A steady core. An open fleet.')
-        ->assertSee('One install, then tell your agent.')
+        ->assertSee('A steady core. Swap the rest.')
+        ->assertSee('Let your agent set it up.')
         ->assertScript('document.querySelectorAll("[data-hero-constellation] circle").length >= 10', true)
         ->assertScript('document.querySelectorAll("[data-chapter]").length', 3)
-        ->assertScript('document.querySelectorAll("[data-page-stars] .orbit-star").length >= 300', true)
+        ->assertScript('document.querySelectorAll("[data-page-stars] .orbit-starfield__stars").length === 1', true)
         ->assertScript('document.querySelectorAll("[data-hero-constellation]").length', 1)
-        ->assertScript('document.querySelectorAll(".orbit-story-ruler").length', 4)
+        ->assertScript('document.querySelectorAll(".orbit-story-ruler").length', 5)
         ->assertScript('document.querySelectorAll("[data-role-chip]").length', 0)
         ->assertScript('document.querySelectorAll("[id^=stage-tab-]").length', 0)
         ->assertNoJavaScriptErrors()
@@ -267,13 +266,13 @@ it('keeps homepage typography and topology details at the reference scale', func
         '(() => { const planets = Array.from(document.querySelectorAll("[data-orbit-planet]")); return planets.length > 0 && planets.every((planet) => planet.getAttribute("vector-effect") === "non-scaling-stroke" && planet.getAttribute("stroke-width") === "1"); })()',
         true,
     )->assertScript(
-        '(() => { const svg = document.querySelector("[data-story-topology]"); const label = Array.from(svg.querySelectorAll("text")).find((node) => node.textContent === "dev-01"); return parseFloat(getComputedStyle(label).fontSize) === (innerWidth <= 600 ? 22 : 12); })()',
+        '(() => { const svg = document.querySelector("[data-story-topology]"); const label = Array.from(svg.querySelectorAll("text")).find((node) => node.textContent === "dev-01"); return parseFloat(getComputedStyle(label).fontSize) === 9; })()',
         true,
     )->assertScript(
-        'Math.abs(document.querySelector("[data-hero-constellation=primary]").getBoundingClientRect().width - Math.min(3600, innerWidth * 1.4, innerHeight * 2.2)) < 1',
+        'Math.abs(document.querySelector("[data-hero-constellation=primary]").getBoundingClientRect().width - (innerWidth<=600 ? 780 : innerWidth<=1100 ? 1160 : Math.min(3600, innerWidth * 1.4, innerHeight * 2.2))) < 1',
         true,
     )->assertScript(
-        'Math.abs(parseFloat(getComputedStyle(document.querySelector("[data-hero] h1")).fontSize) - (window.innerHeight <= 780 ? Math.min(60, Math.max(36, window.innerWidth * 0.044)) : Math.min(80, Math.max(42, window.innerWidth * 0.05)))) < 0.1',
+        'Math.abs(parseFloat(getComputedStyle(document.querySelector("[data-hero] h1")).fontSize) - (innerWidth<=600 ? Math.min(58,Math.max(37,innerWidth*.108)) : innerWidth<=1100 ? Math.min(72,Math.max(44,innerWidth*.075)) : window.innerHeight <= 780 ? Math.min(60, Math.max(36, window.innerWidth * 0.044)) : Math.min(80, Math.max(42, window.innerWidth * 0.05)))) < 0.1',
         true,
     )->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
@@ -343,9 +342,9 @@ it('centers the wider hero and keeps its desktop title on two lines', function (
         const lines = title.getBoundingClientRect().height / parseFloat(style.lineHeight);
         const cta = content.querySelector("[data-cta]");
         return Math.abs(bounds.left + bounds.width / 2 - innerWidth / 2) < 1
-            && style.textAlign === "center"
-            && getComputedStyle(content.querySelector("p")).textAlign === "center"
-            && getComputedStyle(cta).justifyContent === "center"
+            && style.textAlign === (innerWidth<=1100 ? "left" : "center")
+            && getComputedStyle(content.querySelector("p")).textAlign === (innerWidth<=1100 ? "left" : "center")
+            && getComputedStyle(cta).justifyContent === (innerWidth<=1100 ? "flex-start" : "center")
             && (innerWidth < 1024 || Math.abs(lines - 2) < 0.1)
             && !content.textContent.includes("composer global require")
             && (innerWidth < 1440 || Math.abs(content.querySelector("p").getBoundingClientRect().height / parseFloat(getComputedStyle(content.querySelector("p")).lineHeight) - 2) < 0.1)
@@ -429,7 +428,7 @@ it('shows one company network at half opacity with its gateway behind the centra
             const gateway = scene.querySelector("[data-hero-body=gateway]").getScreenCTM();
             const bounds = scene.getBoundingClientRect();
             return getComputedStyle(scene).opacity === "0.5"
-                && getComputedStyle(scene).maskImage.includes("rgba(0, 0, 0, 0) 55%")
+                && getComputedStyle(scene).maskImage.includes(innerWidth<=1100 ? "linear-gradient" : "rgba(0, 0, 0, 0) 55%")
                 && Math.abs(gateway.e - bounds.left - parseFloat(scene.style.getPropertyValue("--orbit-center-x"))) < 0.1
                 && Math.abs(gateway.f - bounds.top - parseFloat(scene.style.getPropertyValue("--orbit-center-y"))) < 0.1
                 && scene.querySelectorAll("[data-hero-constellation]").length === 1
@@ -603,11 +602,11 @@ it('follows three calm chapters with six responsive capability panels', function
     $page->assertSee('A private network, wherever you are.')
         ->assertSee('Your projects. Your names.')
         ->assertSee('One place to know what exists.')
-        ->assertSee('Follow the problem, not a trail of guesses.')
-        ->assertSee('Your fleet, under your command.')
-        ->assertSee('Agents create and manage nodes, apps and rules with deterministic tools that use fewer tokens. You keep full CLI control.')
+        ->assertSee('See drift before it becomes an outage.')
+        ->assertSee('Your agent runs it. You keep the CLI.')
+        ->assertSee('Agents create nodes, apps, and rules through deterministic commands that use fewer tokens and leave less to guess. The same CLI stays in your hands.')
         ->assertSee('Every action leaves a trail.')
-        ->assertSee('Every action is logged. See what happened when things go wrong.')
+        ->assertSee('Every change is logged with who made it: you, or which agent. When something breaks, read what happened instead of guessing.')
         ->assertScript('document.querySelectorAll("[data-capability=activity] [data-log-entry]").length', 8)
         ->assertScript('document.querySelector("[data-capability=activity] [data-log-entry=failed]").textContent.includes("route failed")', true)
         ->assertScript('() => [...document.querySelectorAll("[data-capability]")].every(el => {
@@ -683,11 +682,12 @@ it('halves the story chapter spacing and balances its desktop connector', functi
     $page->assertScript('() => {
         const grid=document.querySelector("[data-chapter=premise] .orbit-story-chapter__grid");
         const padding=parseFloat(getComputedStyle(grid).paddingTop);
-        if(Math.abs(padding-Math.max(56,Math.min(112,innerWidth*.07)))>1) return false;
+        if(Math.abs(padding-(innerWidth<=900?56:Math.max(56,Math.min(112,innerWidth*.07))))>1) return false;
         const compactPadding=Math.max(32,Math.min(56,innerWidth*.035));
         for(const [chapter,edge] of [["problem","paddingBottom"],["premise","paddingBottom"],["topology","paddingTop"]]) {
             const style=getComputedStyle(document.querySelector(`[data-chapter=${chapter}] .orbit-story-chapter__grid`));
-            if(Math.abs(parseFloat(style[edge])-compactPadding)>1) return false;
+            const expected=innerWidth<=900 && chapter==="problem" ? 64 : compactPadding;
+            if(Math.abs(parseFloat(style[edge])-expected)>1) return false;
         }
         if(innerWidth<=900) return document.documentElement.scrollWidth<=innerWidth;
         const previousCopy=document.querySelector("[data-chapter=problem] .orbit-story-chapter__copy").getBoundingClientRect();
@@ -709,7 +709,7 @@ it('joins bento panels edge to edge with single shared dividers', function (int 
         const style=getComputedStyle(grid);
         if(style.rowGap!=="0px"||style.columnGap!=="0px") return false;
         if(!cards.every(el=>getComputedStyle(el).borderRadius==="0px")) return false;
-        const rows=innerWidth<=600?[[0],[1],[2],[3],[4],[5]]:[[0,1],[2,3],[4,5]];
+        const rows=innerWidth<=600?[[0],[1],[2],[3],[4],[5]]:innerWidth<=900?[[0],[1,2],[3],[4,5]]:[[0,1],[2,3],[4,5]];
         for(let row=0;row<rows.length;row++){
             const indices=rows[row];
             if(indices.length===2){
@@ -841,7 +841,7 @@ it('orbits named clusters around a fixed central Gateway with level latitudes', 
         const gateway=svg.querySelector("[data-story-node=Gateway]");
         const pose=el=>el.transform.baseVal.consolidate().matrix;
         const g=pose(gateway), view=svg.viewBox.baseVal;
-        if(g.e!==view.width/2||g.f!==view.height/2) return false;
+        if(g.e!==540||g.f!==540) return false;
         if(svg.querySelectorAll("[data-story-cluster]").length!==2) return false;
         if(!["Gateway","dev-01","dev-02","database","worker-01"].every(id=>svg.querySelector(`[data-story-node=${id}]`))) return false;
         const initial=pose(svg.querySelector("[data-story-node=dev-01]")).e;
@@ -941,8 +941,10 @@ it('centers moon names vertically while preserving fixed constellation label ali
             try {
                 await new Promise(resolve=>request.call(window,resolve));
                 for(let sample=0;sample<72;sample++) {
-                    for(let frame=0;frame<50;frame++) {
-                        now+=50;
+                    // Keep the same 2.5-second sample spacing and three-minute
+                    // orbit, without rendering twice as many intermediate frames.
+                    for(let frame=0;frame<25;frame++) {
+                        now+=100;
                         const callbacks=[...pending.values()]; pending.clear();
                         callbacks.forEach(callback=>callback(now));
                     }
@@ -963,7 +965,7 @@ it('centers moon names vertically while preserving fixed constellation label ali
                     visible.forEach(label=>seen.add(label));
                     const text=visible.flatMap(label=>[...label.querySelectorAll("text")].map(el=>el.getBoundingClientRect()));
                     if(text.some((a,i)=>text.slice(i+1).some(b=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom))) return false;
-                    if(text.some(box=>box.left<0||box.right>innerWidth)) return false;
+                    if(innerWidth>1100 && text.some(box=>box.left<0||box.right>innerWidth)) return false;
                 }
                 return seen.size===labels.length && document.documentElement.scrollWidth<=innerWidth;
             } finally {
@@ -1160,6 +1162,7 @@ it('shrinks the control laptop and keeps the early opening and device ports alig
     $page->assertScript('() => {
         const scene=document.querySelector("[data-server-scene]");
         const rect=scene.getBoundingClientRect(), d=scene.dataset;
+        rect.y-=new DOMMatrix(getComputedStyle(scene.closest(".orbit-story-chapter__grid")).transform).m42;
         const start=rect.top+scrollY+rect.height*.12-innerHeight*.88;
         const distance=Math.max(180,Math.min(280,rect.height*.4));
         if(Math.abs(Number(d.scrollStart)-start)>1||Math.abs(Number(d.scrollEnd)-start-distance)>1) return false;
@@ -1196,7 +1199,7 @@ it('insets the smaller premise laptop and gives the tablet a direct uncluttered 
         const container=scene.closest(".orbit-story-chapter__grid").getBoundingClientRect();
         const boundary=innerWidth>900 ? container.left : scene.getBoundingClientRect().left;
         const sceneScale=scene.getScreenCTM().a;
-        if(laptop.left-boundary<20*sceneScale||laptop.left-boundary>40*sceneScale) return false;
+        if(innerWidth>600 && (laptop.left-boundary<20*sceneScale||laptop.left-boundary>40*sceneScale)) return false;
         if(scene.querySelector("[data-server-label], .orbit-handoff__caption")) return false;
         const path=scene.querySelector("[data-device-link=tablet]");
         const coords=path.getAttribute("d").match(/-?[\\d.]+/g).map(Number);
@@ -1231,6 +1234,7 @@ it('opens the control laptop gradually from the same early scroll position', fun
     $page->assertScript('async () => {
         const scene=document.querySelector("[data-server-scene]");
         const rect=scene.getBoundingClientRect();
+        rect.y-=new DOMMatrix(getComputedStyle(scene.closest(".orbit-story-chapter__grid")).transform).m42;
         const start=rect.top+scrollY+rect.height*.12-innerHeight*.88;
         if(Math.abs(Number(scene.dataset.scrollStart)-start)>1) return false;
         const poses=[];
@@ -1244,7 +1248,9 @@ it('opens the control laptop gradually from the same early scroll position', fun
     }', true);
     $page->script('async () => {
         const scene=document.querySelector("[data-server-scene]");
-        scrollTo({top:scene.getBoundingClientRect().top+scrollY-innerHeight*.5,behavior:"instant"});
+        const bounds=scene.getBoundingClientRect();
+        bounds.y-=new DOMMatrix(getComputedStyle(scene.closest(".orbit-story-chapter__grid")).transform).m42;
+        scrollTo({top:bounds.top+scrollY-innerHeight*.5,behavior:"instant"});
         await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
     }');
     $page->assertAttribute('[data-server-scene]', 'data-control-phase', 'open')
@@ -1264,7 +1270,7 @@ it('illustrates custom namespaces and the shared inventory beneath a centered he
         if(innerWidth>=1024 && heading.getBoundingClientRect().height>parseFloat(getComputedStyle(heading).lineHeight)+1) return false;
         if (![section.querySelector(".orbit-capabilities__inner > .orbit-label"), section.querySelector("h2")].every(el => {
             const rect = el.getBoundingClientRect();
-            return getComputedStyle(el).textAlign === "center"
+            return innerWidth<=600 ? Math.abs(rect.left-grid.left)<1 : getComputedStyle(el).textAlign === "center"
                 && Math.abs((rect.left + rect.right) / 2 - (grid.left + grid.right) / 2) < 1;
         })) return false;
         if (!cards.every(card => {
@@ -1284,11 +1290,11 @@ it('illustrates custom namespaces and the shared inventory beneath a centered he
             });
             const drawing = card.querySelector(".orbit-capability__drawing").getBoundingClientRect();
             const heading = card.querySelector("h3").getBoundingClientRect();
-            return getComputedStyle(card.querySelector("p")).fontSize === getComputedStyle(document.querySelector(".orbit-story-chapter__copy p")).fontSize
+            return getComputedStyle(card.querySelector("p")).fontSize === (innerWidth<=600 ? "15px" : "16px")
                 && corners.length === 4 && cornerStyles
                 && getComputedStyle(accents).opacity === "1"
                 && ["top", "right", "bottom", "left"].every(side => getComputedStyle(accents)[side] === "-1px")
-                && drawing.bottom <= heading.top
+                && (innerWidth>600 && innerWidth<=900 && ["wireguard","doctor"].includes(card.dataset.capability) ? drawing.right<heading.left : drawing.bottom<=heading.top)
                 && card.scrollWidth <= card.clientWidth + 1;
         })) return false;
         const network = cards[0];
@@ -1317,7 +1323,7 @@ it('illustrates custom namespaces and the shared inventory beneath a centered he
         const scene = agent.querySelector("[data-agent-network]");
         const projection = scene.getScreenCTM();
         const titleBounds = agent.querySelector("h3").getBoundingClientRect();
-        if (Math.abs(titleBounds.top-viewportBounds.bottom-20)>1) return false;
+        if (Math.abs(titleBounds.top-viewportBounds.bottom-(innerWidth<=600?24:20))>1) return false;
         const sceneBounds = scene.getBoundingClientRect();
         // The orbital plane has equal room and equal fading at both vertical edges.
         if (Math.abs((sceneBounds.top + sceneBounds.bottom - viewportBounds.top - viewportBounds.bottom) / 2) > 1) return false;
@@ -1326,7 +1332,7 @@ it('illustrates custom namespaces and the shared inventory beneath a centered he
         if (getComputedStyle(agent).paddingTop !== "0px" || Math.abs(viewportBounds.top-agent.getBoundingClientRect().top)>1) return false;
         if (viewportBounds.height + 1 < Math.min(680, viewportBounds.width) * 350 / 720
             || viewportStyle.overflow !== "hidden" || !viewportStyle.maskImage.includes("linear-gradient")
-            || Math.abs(scene.getBoundingClientRect().width - viewportBounds.width * 1.1) > 1
+            || Math.abs(scene.getBoundingClientRect().width - viewportBounds.width * (innerWidth<=600?1.55:1.1)) > 1
             || Math.abs(projection.a - projection.d) > .001 || projection.b !== 0 || projection.c !== 0) return false;
         const planets = [...agent.querySelectorAll("[data-agent-planet]")];
         const links = [...agent.querySelectorAll("[data-agent-link]")];
@@ -1354,7 +1360,7 @@ it('illustrates custom namespaces and the shared inventory beneath a centered he
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 1669, 'tablet' => 768, 'mobile' => 390]);
 
-it('anchors capability copy to equal bottom padding and separates the build section', function (int $width) {
+it('keeps capability copy within its panels and separates the build section', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1214);
     $page->script('document.querySelector("[data-capabilities]").scrollIntoView({behavior:"instant"})');
     $page->assertScript('() => {
@@ -1364,20 +1370,12 @@ it('anchors capability copy to equal bottom padding and separates the build sect
             const bounds = card.getBoundingClientRect();
             const text = card.querySelector("p").getBoundingClientRect();
             const bottomPadding = bounds.bottom - parseFloat(style.borderBottomWidth) - text.bottom;
-            return Math.abs(bottomPadding - parseFloat(style.paddingLeft)) < 1
+            return bottomPadding >= parseFloat(style.paddingBottom)-1
                 && card.querySelector("h3").getBoundingClientRect().bottom <= text.top;
         })) return false;
-        if (innerWidth > 600 && ![0, 2, 4].every(i =>
+        if (innerWidth > 900 && ![0, 2, 4].every(i =>
             Math.abs(cards[i].querySelector("p").getBoundingClientRect().bottom - cards[i + 1].querySelector("p").getBoundingClientRect().bottom) < 1
         )) return false;
-        if (![1, 5].every(i => {
-            const text = cards[i].querySelector("p");
-            return text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight) <= 2.01;
-        })) return false;
-        const title = cards[3].querySelector("h3");
-        const fleetCopy = cards[4].querySelector("p");
-        if (innerWidth >= 1440 && fleetCopy.getBoundingClientRect().height / parseFloat(getComputedStyle(fleetCopy).lineHeight) > 2.01) return false;
-        if (innerWidth >= 1440 && title.getBoundingClientRect().height > parseFloat(getComputedStyle(title).lineHeight) + 1) return false;
         const build = document.querySelector("#build");
         const divider = build.previousElementSibling;
         const [above, hatch, below] = divider.children;
@@ -1404,7 +1402,7 @@ it('lets the intro constellation flow into the story without a divider or clippe
         return shell.nextElementSibling===story && !shell.querySelector(".orbit-story-ruler")
             && getComputedStyle(shell).overflowY==="visible"
             && Math.abs(shell.getBoundingClientRect().bottom-story.getBoundingClientRect().top)<1
-            && shapes.every(el=>el.getBoundingClientRect().bottom<=bounds.bottom+1)
+            && (innerWidth<=1100 ? getComputedStyle(network).overflow==="hidden" : shapes.every(el=>el.getBoundingClientRect().bottom<=bounds.bottom+1))
             && (innerWidth<1000 || bounds.bottom>shell.getBoundingClientRect().bottom+50)
             && document.querySelectorAll("[data-story-divider] .orbit-story-hatch").length===2
             && document.documentElement.scrollWidth<=innerWidth;
@@ -1542,7 +1540,7 @@ it('keeps the pinned hero calls to action usable and removes hidden controls fro
         ->assertScript('document.querySelector("[data-hero-content]").inert', true);
     $page->script('scrollTo({top: 0, behavior: "instant"})');
     $page->assertScript('document.querySelector("[data-hero-content]").inert', false)
-        ->click('Quickstart')->assertScript('location.hash', '#install');
+        ->click('Skip to setup')->assertScript('location.hash', '#install');
     $page->assertScript('() => {
         const content = document.querySelector("[data-hero-content]");
         content.querySelector("a").focus();
@@ -1580,7 +1578,7 @@ it('draws and retracts the connection exactly to its scroll signal', function (s
     'growth mobile' => ['data-growth-route', 390],
 ]);
 
-it('keeps the private network hardware and coin inside its masked illustration', function (int $width) {
+it('frames the private network around visible devices and its coin', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
     $page->script('document.querySelector("[data-capability=wireguard]").scrollIntoView({block:"center",behavior:"instant"})');
     $page->assertSee('A private network, wherever you are.')
@@ -1610,6 +1608,12 @@ it('keeps the private network hardware and coin inside its masked illustration',
                 && drawing.querySelectorAll("[data-network-link]").length === 5
                 && parts.every(part => {
                     const box = part.getBoundingClientRect();
+                    if (part === laptop && innerWidth <= 1100) {
+                        // The phone camera leaves the laptop outside the frame;
+                        // tablet framing trims only its outer edge.
+                        return innerWidth <= 600 ? box.right < bounds.left
+                            : box.left >= bounds.left - 6 && box.right <= bounds.right;
+                    }
                     return box.left >= bounds.left && box.right <= bounds.right
                         && box.top >= bounds.top && box.bottom <= bounds.bottom;
                 })
@@ -1617,7 +1621,9 @@ it('keeps the private network hardware and coin inside its masked illustration',
                 && logo.width > 20 && logo.height > 10
                 && getComputedStyle(drawing).maskImage.includes("100%")
                 && getComputedStyle(drawing).backgroundColor === "rgba(0, 0, 0, 0)"
-                && bounds.bottom <= card.querySelector("h3").getBoundingClientRect().top
+                && (innerWidth > 600 && innerWidth <= 900
+                    ? bounds.right < card.querySelector("h3").getBoundingClientRect().left
+                    : bounds.bottom <= card.querySelector("h3").getBoundingClientRect().top)
                 && document.documentElement.scrollWidth <= innerWidth;
         }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['annotated desktop' => 2135, 'tablet' => 768, 'mobile' => 390]);
@@ -1636,16 +1642,21 @@ it('alternates one private network signal between connections and directions', f
             const scene = document.querySelector("[data-capability=wireguard] > svg");
             const signals = scene.querySelectorAll("[data-network-signal]");
             const signal = signals[0];
-            const progress = Number(signal.dataset.progress);
+            const animation = signal.getAnimations()[0];
+            const progress = Number(animation?.currentTime) / 1800;
             const routes = [...scene.querySelectorAll("[data-network-link]")];
             if (signals.length !== 1 || Number(signal.dataset.route) !== '.$route.'
                 || signal.dataset.direction !== "'.$direction.'" || progress < .2 || progress > .7) return false;
             const path = routes['.$route.'];
-            const point = path.getPointAtLength(path.getTotalLength() * (signal.dataset.direction === "to-coin" ? 1 - progress : progress));
-            const head = signal.getPointAtLength(signal.getTotalLength());
+            const style = getComputedStyle(signal);
+            const dash = parseFloat(style.strokeDasharray);
+            const offset = parseFloat(style.strokeDashoffset);
+            const head = signal.dataset.direction === "to-coin" ? -offset : dash-offset;
+            const expected = path.getTotalLength() * (signal.dataset.direction === "to-coin" ? 1-progress : progress);
             return signal.tagName === "path" && signal.getAttribute("visibility") === "visible"
-                && signal.getTotalLength() > 14 && signal.getTotalLength() <= 16.1
-                && Math.hypot(head.x - point.x, head.y - point.y) < .1
+                && Number(style.opacity) === 1 && dash === 16
+                && signal.getAttribute("d") === path.getAttribute("d")
+                && Math.abs(head-expected) < .1
                 && routes.every(route => getComputedStyle(route).strokeDasharray === "none");
         }', true);
     }
@@ -1831,10 +1842,15 @@ it('orbits agent planets with attached dashed links and signals while visible', 
             && orbitBounds.width/viewport.width>.92
             && Math.abs(rx/ry-2.25)<.001
             && scene.querySelector(".orbit-capability__coin-face").r.baseVal.value===38
-            && planets.every(planet=>{
-                const radius=planet.querySelector("circle").getBoundingClientRect().width/2;
-                return orbitBounds.left-radius>=viewport.left-1 && orbitBounds.right+radius<=viewport.right+1;
-            })
+            && (innerWidth<=600
+                ? orbitBounds.left<viewport.left && orbitBounds.right>viewport.right
+                    && getComputedStyle(scene.parentElement).overflow==="hidden"
+                    && scene.querySelector("[data-agent-platform]").getBoundingClientRect().left>viewport.left
+                    && scene.querySelector("[data-agent-platform]").getBoundingClientRect().right<viewport.right
+                : planets.every(planet=>{
+                    const radius=planet.querySelector("circle").getBoundingClientRect().width/2;
+                    return orbitBounds.left-radius>=viewport.left-1 && orbitBounds.right+radius<=viewport.right+1;
+                }))
             && Math.max(...gaps)/Math.min(...gaps)<1.01
             && !scene.querySelector("[data-agent-platform] rect, [data-agent-platform] polygon")
             && planets.every((planet,index)=>{

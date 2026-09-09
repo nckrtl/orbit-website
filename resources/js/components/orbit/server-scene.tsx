@@ -9,6 +9,8 @@ import {
     lidGeometry,
 } from "./laptop";
 import { objectTransform, scalePoint } from "./object-scale";
+import { useSceneViewport } from "./use-scene-viewport";
+import { storyLayoutBounds } from "./story-entrance";
 
 type Point = [number, number];
 const server = { x: 365, y: 120, width: 150, depth: 150, height: 150 };
@@ -196,6 +198,7 @@ export function OnlineDevice({
 
 export function PremiseScene() {
     const ref = useRef<SVGSVGElement>(null);
+    useSceneViewport(ref, "0 0 740 560", "180 35 500 500", "0 25 740 510");
     const ventId = useId();
     useEffect(() => {
         const svg = ref.current;
@@ -215,7 +218,7 @@ export function PremiseScene() {
             frame = 0;
             if (disposed) return;
             if (dirty) {
-                const rect = svg.getBoundingClientRect();
+                const rect = storyLayoutBounds(svg);
                 top = rect.top + scrollY;
                 height = rect.height;
                 dirty = false;

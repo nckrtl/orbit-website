@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import { storyCopyEntranceStart, storyEntranceEnd } from "./story-entrance";
+import {
+    storyCopyBounds,
+    storyCopyEntranceStart,
+    storyEntranceEnd,
+    storyLayoutBounds,
+} from "./story-entrance";
 
 export function useHeroScroll() {
     const ref = useRef<HTMLDivElement>(null);
@@ -11,7 +16,7 @@ export function useHeroScroll() {
             .closest("[data-hero-scene]")
             ?.querySelector<HTMLElement>("[data-hero-network]");
 
-        const desktop = matchMedia("(min-width: 1024px) and (min-height: 600px)");
+        const desktop = matchMedia("(min-width: 1101px) and (min-height: 600px)");
         const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
         const items = Array.from(
             content.querySelectorAll<HTMLElement>("[data-hero-enter]"),
@@ -113,8 +118,8 @@ export function useHeroScroll() {
                 .trim();
             scrollDuration = parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000);
             exitStart = viewportHeight * 0.15;
-            const copyBounds = storyCopy?.getBoundingClientRect();
-            const laptopBounds = laptop?.getBoundingClientRect();
+            const copyBounds = storyCopy ? storyCopyBounds(storyCopy) : undefined;
+            const laptopBounds = laptop ? storyLayoutBounds(laptop) : undefined;
             const copyStart = copyBounds
                 ? storyCopyEntranceStart(
                       copyBounds,

@@ -17,9 +17,9 @@ it('gathers parallel lanes through rounded turns without merging at the core', f
             const length=path.getTotalLength();
             const matrix=path.getScreenCTM();
             const start=path.getPointAtLength(0).matrixTransform(matrix);
-            const first=path.getPointAtLength(80).matrixTransform(matrix);
+            const first=path.getPointAtLength(Math.min(80,bounds.height*.1)).matrixTransform(matrix);
             const end=path.getPointAtLength(length).matrixTransform(matrix);
-            const last=path.getPointAtLength(length-80).matrixTransform(matrix);
+            const last=path.getPointAtLength(length-Math.min(80,bounds.height*.1)).matrixTransform(matrix);
             if(Math.abs(start.x-first.x)>.1 || Math.abs(end.x-last.x)>.1 || first.y<=start.y || end.y<=last.y) return false;
             if(Math.abs(end.x-(bounds.left+bounds.width/2))>=Math.abs(start.x-(bounds.left+bounds.width/2))) return false;
             const style=getComputedStyle(path);
@@ -57,7 +57,7 @@ it('frames the six benefits with matching expanding and gathering trees', functi
         if(Math.abs(g.top-a.bottom-(b.top-g.bottom))>.1) return false;
         if(g.top-a.bottom>8.1 || b.top-g.bottom>8.1 || Math.abs(a.top-figure.getBoundingClientRect().bottom)>.1) return false;
         const preview=document.querySelector("[data-stack-device=tablet]").getBoundingClientRect();
-        if(figure.getBoundingClientRect().bottom-preview.bottom>3 || preview.bottom>figure.getBoundingClientRect().bottom) return false;
+        if(innerWidth>1100 && (figure.getBoundingClientRect().bottom-preview.bottom>3 || preview.bottom>figure.getBoundingClientRect().bottom)) return false;
         if(getComputedStyle(upper).opacity!=="0.5" || getComputedStyle(lower).opacity!=="0.5") return false;
         const bridge=document.querySelector(".orbit-stack__bridge-core");
         const bridgeStart=bridge.getPointAtLength(0).matrixTransform(bridge.getScreenCTM());
@@ -130,3 +130,32 @@ it('sends staggered signals downward through both trees and pauses them offscree
     $page->assertScript('() => [...document.querySelectorAll("[data-funnel-signal]")].every(signal=>signal.getAnimations()[0]?.playState==="paused")', true)
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 2135, 'mobile' => 390]);
+
+it('reveals both trees through a soft scroll veil without fading the whole drawing', function (int $width, bool $reduced) {
+    $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
+    $page->assertScript('async () => {
+        await document.fonts.ready;
+        const settle = async () => { await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); };
+        await settle();
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        for (const tree of document.querySelectorAll(".orbit-core-funnel")) {
+            const start = Number(tree.dataset.buildRevealStart);
+            const end = Number(tree.dataset.buildRevealEnd);
+            for (const progress of [0, .25, .75, 1, .25]) {
+                scrollTo({top:start + (end-start)*progress, behavior:"instant"});
+                await settle();
+                const style = getComputedStyle(tree);
+                if (style.opacity !== "1" || style.filter !== "none") return false;
+                if (reduced) {
+                    if (style.maskImage !== "none" || tree.dataset.buildProgress !== "1") return false;
+                } else {
+                    if (Math.abs(Number(tree.dataset.buildProgress)-progress) > .01) return false;
+                    if (!style.maskImage.startsWith("linear-gradient(")) return false;
+                    const stops = [...style.maskImage.matchAll(/(-?[\d.]+)%/g)].map(match => Number(match[1]));
+                    if (stops.length !== 2 || Math.abs(stops[0]-(130*progress-30))>1 || Math.abs(stops[1]-130*progress)>1) return false;
+                }
+            }
+        }
+        return document.documentElement.scrollWidth <= innerWidth;
+    }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
+})->with(['desktop' => [1906, false], 'mobile' => [390, false], 'reduced motion' => [1906, true]]);

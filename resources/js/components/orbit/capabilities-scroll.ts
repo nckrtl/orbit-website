@@ -11,6 +11,8 @@ export function useCapabilitiesScroll() {
         const motion = matchMedia("(prefers-reduced-motion: reduce)");
         let frame = 0;
         let disposed = false;
+        let lastEntering = -1;
+        let lastExiting = -1;
         let enterStart = 0,
             enterDistance = 1,
             exitStart = 0,
@@ -20,6 +22,9 @@ export function useCapabilitiesScroll() {
             frame = 0;
             const entering = motion.matches ? 1 : clamp((scrollY - enterStart) / enterDistance);
             const exiting = motion.matches ? 0 : clamp((scrollY - exitStart) / exitDistance);
+            if (entering === lastEntering && exiting === lastExiting) return;
+            lastEntering = entering;
+            lastExiting = exiting;
             const opacity = entering * (1 - exiting);
             element.style.setProperty("--capabilities-opacity", String(opacity));
             element.style.setProperty(

@@ -1,3 +1,4 @@
+import { observeSceneActivity } from "./animation";
 import { useEffect, useId, useRef, useState } from "react";
 import { hardwarePoint } from "./laptop";
 import { TabBacking } from "./tab-backing";
@@ -20,27 +21,14 @@ export function ActionLogDrawing() {
     useEffect(() => {
         const svg = ref.current;
         if (!svg) return;
-        const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        let visible = false;
         let timer: ReturnType<typeof setInterval> | undefined;
-        const update = () => {
+        const stop = observeSceneActivity(svg, ({ active }) => {
             clearInterval(timer);
-            const active = visible && !document.hidden && !motion.matches;
-            svg.dataset.animating = String(active);
             if (active) timer = setInterval(() => setSequence((value) => value + 1), 3000);
-        };
-        const observer = new IntersectionObserver((entries) => {
-            visible = entries[entries.length - 1].isIntersecting;
-            update();
         });
-        observer.observe(svg);
-        motion.addEventListener("change", update);
-        document.addEventListener("visibilitychange", update);
         return () => {
             clearInterval(timer);
-            observer.disconnect();
-            motion.removeEventListener("change", update);
-            document.removeEventListener("visibilitychange", update);
+            stop();
         };
     }, []);
 

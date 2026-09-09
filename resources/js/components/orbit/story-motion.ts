@@ -1,6 +1,8 @@
+import { animateScene } from "./animation";
 import { useEffect, useRef } from "react";
 import { globe, constellationSignal, constellationReadoutTransform } from "./hero-constellation";
 import { objectScale } from "./object-scale";
+import { storyLayoutBounds } from "./story-entrance";
 
 type Point = { x: number; y: number };
 type Positions = Record<string, Point>;
@@ -129,10 +131,7 @@ export function useStoryMotion(revision: string) {
         const signals = [...svg.querySelectorAll<SVGGElement>("[data-story-signal]")];
         const reveal = [...svg.querySelectorAll<SVGElement>("[data-story-reveal]")];
         const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        let frame = 0,
-            previous: number | null = null,
-            visible = false,
-            disposed = false;
+        let disposed = false;
         let top = 0,
             height = 1,
             scale = 1,
@@ -227,28 +226,27 @@ export function useStoryMotion(revision: string) {
                 signal.style.opacity = motion.matches ? "0" : String(pose.opacity * progress);
             });
         };
-        const tick = (now: number) => {
-            frame = 0;
-            if (previous !== null) clock.current += Math.min(50, now - previous) / 1000;
-            previous = now;
-            paint(clock.current);
-            frame = requestAnimationFrame(tick);
-        };
-        const sync = () => {
-            cancelAnimationFrame(frame);
-            frame = 0;
-            previous = null;
-            const running = visible && !document.hidden && !motion.matches;
-            svg.dataset.animating = String(running);
-            if (motion.matches) {
-                clock.current = 0;
-                lastGlobe = -Infinity;
-                paint(0);
-            }
-            if (running) frame = requestAnimationFrame(tick);
-        };
+        const compact = matchMedia("(max-width: 1100px)");
+        const stop = animateScene(
+            svg,
+            (_elapsed, delta) => {
+                clock.current += delta;
+                paint(clock.current);
+            },
+            {
+                fps: () => (compact.matches ? 30 : 60),
+                onActivity: ({ active, reducedMotion }) => {
+                    svg.dataset.animating = String(active);
+                    if (reducedMotion) {
+                        clock.current = 0;
+                        lastGlobe = -Infinity;
+                        paint(0);
+                    }
+                },
+            },
+        );
         const measure = () => {
-            const rect = svg.getBoundingClientRect();
+            const rect = storyLayoutBounds(svg);
             top = rect.top + scrollY;
             height = rect.height;
             scale = rect.width / svg.viewBox.baseVal.width;
@@ -270,27 +268,17 @@ export function useStoryMotion(revision: string) {
             paint(clock.current);
         };
         const resize = new ResizeObserver(measure);
-        const intersection = new IntersectionObserver((entries) => {
-            visible = entries[entries.length - 1].isIntersecting;
-            sync();
-        });
         resize.observe(svg);
-        intersection.observe(svg);
         window.addEventListener("resize", measure);
-        document.addEventListener("visibilitychange", sync);
-        motion.addEventListener("change", sync);
         void document.fonts.ready.then(() => {
             if (!disposed) measure();
         });
         measure();
         return () => {
             disposed = true;
-            cancelAnimationFrame(frame);
+            stop();
             resize.disconnect();
-            intersection.disconnect();
             window.removeEventListener("resize", measure);
-            document.removeEventListener("visibilitychange", sync);
-            motion.removeEventListener("change", sync);
         };
     }, [revision]);
     return ref;

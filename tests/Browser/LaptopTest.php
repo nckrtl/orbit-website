@@ -118,7 +118,7 @@ it('holds the laptop open while reading and scrubs every process offline and onl
         ->assertNoJavaScriptErrors();
 });
 
-it('keeps the open laptop and its process labels in frame with reduced motion', function (int $width) {
+it('frames the open laptop with peripheral detail cropped on phones and reduced motion', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
 
     $page->assertAttribute('[data-lid]', 'data-lid', 'open');
@@ -127,8 +127,10 @@ it('keeps the open laptop and its process labels in frame with reduced motion', 
     $page->assertScript('function() {
             const scene = document.querySelector("[data-laptop]").getBoundingClientRect();
             const face = document.querySelector("[data-lid-face]").transform.baseVal.consolidate().matrix;
-            const bounds = [...document.querySelectorAll("[data-lid-back], [data-deck], [data-process], [data-preview-device]")]
-                .map(element => element.getBoundingClientRect());
+            const parts = [...document.querySelectorAll("[data-lid-back], [data-deck], [data-process], [data-preview-device]")];
+            const bounds = parts.filter(element => innerWidth > 600 || element.matches("[data-lid-back], [data-deck], [data-preview-device=tablet]")).map(element => element.getBoundingClientRect());
+            const cropped = innerWidth > 600 || (getComputedStyle(document.querySelector("[data-laptop]")).overflow === "hidden"
+                && parts.some(element => element.getBoundingClientRect().left < scene.left));
             const compactLabels = [...document.querySelectorAll("[data-process]")].every(process => {
                 const matrix = process.transform.baseVal.consolidate().matrix;
                 const name = process.querySelector(".orbit-laptop__process-name").getBoundingClientRect();
@@ -136,7 +138,7 @@ it('keeps the open laptop and its process labels in frame with reduced motion', 
                 return Math.abs(matrix.a - 0.85) < 0.001 && Math.abs(matrix.d - 0.85) < 0.001
                     && name.height > 0 && detail.height > 0 && name.bottom < detail.top;
             });
-            return compactLabels && Math.abs(face.c) < 0.001 && face.d > 0.8
+            return cropped && compactLabels && Math.abs(face.c) < 0.001 && face.d > 0.8
                 && Math.atan2(face.b, face.a) < 15 * Math.PI / 180
                 && bounds.every(b => b.left >= scene.left && b.right <= scene.right
                     && b.top >= scene.top && b.bottom <= scene.bottom);
@@ -424,6 +426,7 @@ it('starts closing the laptop and tracing together at the viewport midpoint', fu
         const d=document.querySelector("[data-laptop]").dataset;
         const scene=document.querySelector("[data-laptop]");
         const bounds=scene.getBoundingClientRect();
+        bounds.y-=new DOMMatrix(getComputedStyle(scene.closest(".orbit-story-chapter__grid")).transform).m42;
         window.laptopMidpoint=bounds.top+scrollY+bounds.height/2-innerHeight/2;
         scrollTo({top:window.laptopMidpoint-2,behavior:"instant"});
     }');
@@ -463,11 +466,14 @@ it('sharpens the laptop in place and dissolves it only after closing with revers
             const d = scene.dataset;
             const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
             const entryMiddle = Math.ceil((Number(d.revealStart) + Number(d.revealEnd)) / 2);
-            const entryQuarter = Number(d.revealStart) + (Number(d.revealEnd) - Number(d.revealStart)) / 4;
+            const entryQuarter = Math.ceil(Number(d.revealStart) + (Number(d.revealEnd) - Number(d.revealStart)) / 4);
+            const entryEighth = Number(d.revealStart) + (Number(d.revealEnd) - Number(d.revealStart)) / 8;
+            const compact = innerWidth <= 1100;
             const exitMiddle = (Number(d.exitStart) + Number(d.exitEnd)) / 2;
             const stops = [
                 [Number(d.revealStart) - 2, 0],
-                [entryQuarter, .5],
+                [entryEighth, compact ? .5 : .25],
+                [entryQuarter, compact ? 1 : .5],
                 [entryMiddle, 1],
                 [Number(d.revealEnd) + 2, 1],
                 [(Number(d.scrollStart) + Number(d.scrollEnd)) / 2, 1],
@@ -477,7 +483,8 @@ it('sharpens the laptop in place and dissolves it only after closing with revers
                 [exitMiddle, .5],
                 [Number(d.revealEnd) + 2, 1],
                 [entryMiddle, 1],
-                [entryQuarter, .5],
+                [entryQuarter, compact ? 1 : .5],
+                [entryEighth, compact ? .5 : .25],
                 [Number(d.revealStart) - 2, 0],
             ];
             for (const [top, opacity] of stops) {
@@ -488,7 +495,7 @@ it('sharpens the laptop in place and dissolves it only after closing with revers
                 const expected = reduced ? 1 : opacity;
                 const blur = parseFloat(style.filter.match(/[\\d.]+/)?.[0] ?? "0");
                 if (Math.abs(Number(style.opacity) - expected) > .01
-                    || Math.abs(blur - 6 * (1 - expected)) > .03
+                    || Math.abs(blur - (innerWidth <= 1100 ? 2 : 6) * (1 - expected)) > .03
                     || (expected === 1 && style.filter !== "none")) return false;
                 if (top >= Number(d.exitStart) && !reduced && scene.dataset.phase !== "sleeping") return false;
                 if (reduced && style.transform !== "none") return false;
@@ -498,4 +505,4 @@ it('sharpens the laptop in place and dissolves it only after closing with revers
     }');
     $page->assertScript('window.blurCheckPassed', true)
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
-})->with(['desktop' => [2083, 1214, false], 'mobile' => [390, 844, false], 'reduced motion' => [1440, 1000, true]]);
+})->with(['desktop' => [2083, 1214, false], 'mobile' => [390, 844, false], 'tablet' => [820, 1180, false], 'reduced motion' => [1440, 1000, true]]);

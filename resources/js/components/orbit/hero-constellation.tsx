@@ -1,3 +1,4 @@
+import { animateScene } from "./animation";
 import { useEffect, useId, useRef } from "react";
 import { globe, OrbitPlanet } from "./orbit-planet";
 
@@ -139,8 +140,9 @@ export function HeroConstellations() {
             const bounds = scene.getBoundingClientRect();
             const copy = content.getBoundingClientRect();
             const svg = illustration.querySelector("svg")!.getBoundingClientRect();
-            const x = copy.left + copy.width / 2 - bounds.left;
-            const y = copy.top + copy.height / 2 - bounds.top;
+            const compact = matchMedia("(max-width: 1100px)").matches;
+            const x = compact ? bounds.width * 0.72 : copy.left + copy.width / 2 - bounds.left;
+            const y = compact ? bounds.height - 130 : copy.top + copy.height / 2 - bounds.top;
             // SVG gateway coordinates are (260, 170) in the 520 × 308 viewBox,
             // whose top edge starts at y=14. Keep that point behind the copy.
             illustration.style.translate = `${x - svg.width / 2}px ${y - (svg.height * 156) / 308}px`;
@@ -231,11 +233,6 @@ function HeroConstellation() {
             );
             return progress * progress * (3 - 2 * progress);
         };
-        let visible = false;
-        let frame = 0;
-        let previous: number | null = null;
-        let elapsed = 0;
-        let lastDraw = -Infinity;
         let lastGlobe = -Infinity;
         const compact = window.matchMedia("(max-width: 1023px)");
 
@@ -278,29 +275,16 @@ function HeroConstellation() {
                 );
             });
         };
-        const tick = (now: number) => {
-            if (previous !== null) elapsed += Math.min(now - previous, 50) / 1000;
-            previous = now;
-            const interval = 1000 / (compact.matches ? 30 : 60);
-            if (now - lastDraw >= interval - 0.5) {
-                draw(elapsed);
-                lastDraw = now;
-            }
-            frame = requestAnimationFrame(tick);
-        };
-        const sync = () => {
-            cancelAnimationFrame(frame);
-            previous = null;
-            lastDraw = -Infinity;
-            const running = visible && !document.hidden && !motion.matches;
-            svg.dataset.animating = String(running);
-            if (motion.matches) {
-                elapsed = 0;
-                lastGlobe = -Infinity;
-                draw(0);
-            }
-            if (running) frame = requestAnimationFrame(tick);
-        };
+        const stop = animateScene(svg.closest("[data-hero-network]") ?? svg, draw, {
+            fps: () => (compact.matches ? 30 : 60),
+            onActivity: ({ active, reducedMotion }) => {
+                svg.dataset.animating = String(active);
+                if (reducedMotion) {
+                    lastGlobe = -Infinity;
+                    draw(0);
+                }
+            },
+        });
         const resize = new ResizeObserver(([entry]) => {
             const scale = entry.contentRect.width / 520;
             if (scale <= 0) return;
@@ -311,22 +295,10 @@ function HeroConstellation() {
                 readout.setAttribute("transform", constellationReadoutTransform(radius, scale));
             });
         });
-        const intersection = new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting;
-            sync();
-        });
         resize.observe(svg);
-        intersection.observe(svg.closest("[data-hero-network]") ?? svg);
-        motion.addEventListener("change", sync);
-        document.addEventListener("visibilitychange", sync);
-        sync();
-
         return () => {
-            cancelAnimationFrame(frame);
+            stop();
             resize.disconnect();
-            intersection.disconnect();
-            motion.removeEventListener("change", sync);
-            document.removeEventListener("visibilitychange", sync);
         };
     }, [bodies]);
 

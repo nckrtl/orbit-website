@@ -1,3 +1,4 @@
+import { CardCorners } from "./card-corners";
 import { DoctorDrawing } from "./doctor-drawing";
 import { AgentNetwork } from "./agent-network";
 import { PrivateNetwork } from "./private-network";
@@ -15,7 +16,7 @@ const capabilities = [
     {
         id: "names",
         title: "Your projects. Your names.",
-        body: "Give your cluster a custom TLD. Open apps by name.",
+        body: "Give your cluster its own TLD. Every app gets a name that resolves on every device.",
     },
     {
         id: "store",
@@ -24,18 +25,18 @@ const capabilities = [
     },
     {
         id: "doctor",
-        title: "Follow the problem, not a trail of guesses.",
-        body: "Keep your fleet healthy with Orbit Doctor. You and your agent can spot configuration drift and check system vitals, from CPU to memory, before deciding what needs attention.",
+        title: "See drift before it becomes an outage.",
+        body: "Orbit Doctor compares what the Gateway expects with what each node actually runs, and reports every difference, next to CPU and memory. It never changes a machine. You and your agent decide what to fix.",
     },
     {
         id: "agents",
-        title: "Your fleet, under your command.",
-        body: "Agents create and manage nodes, apps and rules with deterministic tools that use fewer tokens. You keep full CLI control.",
+        title: "Your agent runs it. You keep the CLI.",
+        body: "Agents create nodes, apps, and rules through deterministic commands that use fewer tokens and leave less to guess. The same CLI stays in your hands.",
     },
     {
         id: "activity",
         title: "Every action leaves a trail.",
-        body: "Every action is logged. See what happened when things go wrong.",
+        body: "Every change is logged with who made it: you, or which agent. When something breaks, read what happened instead of guessing.",
     },
 ] as const;
 
@@ -68,7 +69,7 @@ export function Capabilities() {
         >
             <div ref={ref} className="orbit-capabilities__inner">
                 <div className="orbit-label mb-5">The pieces, connected</div>
-                <h2 id="capabilities-title">Small details. A network that feels like yours.</h2>
+                <h2 id="capabilities-title">What it takes to trust an agent with your fleet.</h2>
                 <div className="orbit-capabilities__grid">
                     {capabilities.map((feature) => (
                         <article
@@ -76,12 +77,7 @@ export function Capabilities() {
                             key={feature.id}
                             className="orbit-capability"
                         >
-                            <span className="orbit-capability__corners" aria-hidden="true">
-                                <span data-corner="top-left" />
-                                <span data-corner="top-right" />
-                                <span data-corner="bottom-left" />
-                                <span data-corner="bottom-right" />
-                            </span>
+                            <CardCorners />
                             <FeatureDrawing kind={feature.id} />
                             <h3>{feature.title}</h3>
                             <p>{feature.body}</p>

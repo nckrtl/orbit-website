@@ -1,3 +1,4 @@
+import { animateScene } from "./animation";
 import { useEffect, useId, useRef } from "react";
 import { ConstellationSignalGradient, constellationSignal, globe } from "./hero-constellation";
 import { hardwarePlane } from "./laptop";
@@ -47,62 +48,39 @@ export function AgentNetwork() {
         const links = [...scene.querySelectorAll<SVGPathElement>("[data-agent-link]")];
         const signals = [...scene.querySelectorAll<SVGGElement>("[data-agent-signal]")];
         const signalLayer = scene.querySelector<SVGGElement>("[data-agent-signals]")!;
-        const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        let visible = false;
-        let frame = 0;
-        let elapsed = 0;
-        let previous: number | null = null;
-        let lastPaint = -Infinity;
-        // Update SVG geometry without rerendering React or measuring layout.
-        const paint = (time: number) => {
-            if (previous !== null) elapsed += time - previous;
-            previous = time;
-            if (time - lastPaint >= 32) {
-                lastPaint = time;
+        let lastGlobe = -Infinity;
+        // Geometry and globe detail have separate cadences, with no layout reads.
+        return animateScene(
+            scene,
+            (elapsed) => {
+                const updateGlobes = elapsed - lastGlobe >= 1 / 15;
+                if (updateGlobes) lastGlobe = elapsed;
                 nodes.forEach((radius, index) => {
-                    const to = position(index, elapsed / 1000);
+                    const to = position(index, elapsed);
                     planets[index].setAttribute("transform", `translate(${to.x} ${to.y})`);
-                    latitudes[index].setAttribute("d", globe(radius, index * 0.7, elapsed / 1000));
+                    if (updateGlobes)
+                        latitudes[index].setAttribute("d", globe(radius, index * 0.7, elapsed));
                     links[index].setAttribute("d", connection(to));
                     const inbound = index % 2 === 0;
                     const signal = constellationSignal(
                         inbound ? to : center,
                         inbound ? center : to,
-                        elapsed / 1000,
+                        elapsed,
                         index,
                         false,
                     );
                     signals[index].setAttribute("transform", signal.transform);
                     signals[index].setAttribute("opacity", String(signal.opacity));
                 });
-            }
-            frame = requestAnimationFrame(paint);
-        };
-        const activity = () => {
-            cancelAnimationFrame(frame);
-            previous = null;
-            lastPaint = -Infinity;
-            const active = visible && !document.hidden;
-            scene.dataset.agentActive = String(active);
-            signalLayer.setAttribute(
-                "visibility",
-                active && !motion.matches ? "visible" : "hidden",
-            );
-            if (active && !motion.matches) frame = requestAnimationFrame(paint);
-        };
-        const observer = new IntersectionObserver((entries) => {
-            visible = entries[entries.length - 1].isIntersecting;
-            activity();
-        });
-        observer.observe(scene.parentElement!);
-        document.addEventListener("visibilitychange", activity);
-        motion.addEventListener("change", activity);
-        return () => {
-            cancelAnimationFrame(frame);
-            observer.disconnect();
-            document.removeEventListener("visibilitychange", activity);
-            motion.removeEventListener("change", activity);
-        };
+            },
+            {
+                fps: () => 30,
+                onActivity: ({ active, visible }) => {
+                    scene.dataset.agentActive = String(visible);
+                    signalLayer.setAttribute("visibility", active ? "visible" : "hidden");
+                },
+            },
+        );
     }, []);
 
     return (

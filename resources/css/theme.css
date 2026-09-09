@@ -66,6 +66,7 @@
     --line-default: var(--ink-a12);
     --line-strong: var(--ink-a20);
     --line-button: #353434;
+    --line-prompt-stripe: #141417;
     --grid-line: rgba(244, 242, 236, 0.045);
     --star-dim: rgba(244, 242, 236, 0.14);
     --star-bright: rgba(255, 255, 255, 0.4);
@@ -84,6 +85,7 @@
     --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
     --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --gutter: clamp(20px, 5vw, 64px);
+    --mobile-menu-clearance: max(16px, env(safe-area-inset-bottom));
     --section-y: clamp(72px, 9vw, 160px);
     --texture-grid:
         linear-gradient(var(--grid-line) 1px, transparent 1px),
@@ -95,6 +97,13 @@
         var(--space-4) 1px,
         var(--surface-void) 1px,
         var(--surface-void) 5px
+    );
+    --texture-prompt-stripes: repeating-linear-gradient(
+        135deg,
+        var(--line-prompt-stripe) 0,
+        var(--line-prompt-stripe) 1px,
+        var(--space-1) 1px,
+        var(--space-1) 5px
     );
     --texture-scanline: repeating-linear-gradient(
         180deg,
@@ -117,6 +126,7 @@
     --dur-base: 220ms;
     --dur-slow: 420ms;
     --dur-story-enter: 650ms;
+    --distance-story-parallax: 80px;
     --delay-story-art: 180ms;
     --delay-hero-intro: 250ms;
     --step-hero-intro: 420ms;
@@ -491,6 +501,10 @@
     right: 0;
     left: 0;
     background: transparent;
+    backdrop-filter: none;
+    transition: backdrop-filter 260ms linear;
+}
+.orbit-story-header[data-scrolled="true"] {
     backdrop-filter: blur(14px) saturate(0.9);
 }
 .orbit-story-header__wash {
@@ -647,7 +661,7 @@
         --hero-copy-order: 5;
     }
 }
-@media (min-width: 1024px) and (min-height: 600px) and (prefers-reduced-motion: no-preference) {
+@media (min-width: 1101px) and (min-height: 600px) and (prefers-reduced-motion: no-preference) {
     /* Start hidden in the server render, before JavaScript pins the copy. */
     [data-hero-content]:not([data-scroll-flow]) [data-hero-enter] {
         --hero-copy-exit-blur: calc(
@@ -816,6 +830,7 @@
     max-width: 1600px;
     margin: 0 auto;
     padding: clamp(136px, 14vw, 236px) 0;
+    transform: translateY(var(--story-entry-offset, 0px));
 }
 .orbit-story-chapter__copy {
     min-width: 0;
@@ -1762,6 +1777,10 @@
 [data-laptop][data-run="0"] .orbit-laptop__queue-indicator rect {
     animation-play-state: paused;
 }
+/* Process state and viewport activity both gate the laptop's CSS animations. */
+[data-laptop][data-motion-active="false"] * {
+    animation-play-state: paused !important;
+}
 @keyframes orbit-laptop-signal {
     to {
         stroke-dashoffset: -100;
@@ -1972,8 +1991,8 @@
 .orbit-environments__icon--opencode {
     filter: brightness(0) invert(1);
 }
-#build[data-active="true"] .orbit-environments__track,
-#build[data-active="true"] .orbit-stack__signals path {
+[data-motion-active="true"] .orbit-environments__track,
+[data-motion-active="true"] .orbit-stack__signals path {
     animation-play-state: running;
 }
 .orbit-environments__marquee-row:hover .orbit-environments__track {
@@ -1981,7 +2000,7 @@
 }
 @keyframes orbit-environments-marquee {
     to {
-        transform: translateX(-25%);
+        transform: translateX(-50%);
     }
 }
 .orbit-environments__figure {
@@ -2028,7 +2047,7 @@
     fill: var(--text-secondary);
     animation: orbit-stack-resource 8s linear infinite paused;
 }
-#build[data-active="true"]
+[data-motion-active="true"]
     :is(.orbit-stack__terminal-output, .orbit-stack__statistics-track, .orbit-stack__resource) {
     animation-play-state: running;
 }
@@ -2123,7 +2142,7 @@
     stroke: none;
     animation: orbit-stack-bridge 5s linear infinite paused;
 }
-#build[data-active="true"] .orbit-stack__bridge-pulse {
+[data-motion-active="true"] .orbit-stack__bridge-pulse {
     animation-play-state: running;
 }
 @keyframes orbit-stack-bridge {
@@ -2285,6 +2304,15 @@
     margin: 0 auto;
     padding: 0 var(--gutter);
     overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .orbit-core-funnel[data-build-reveal] {
+        mask-image: linear-gradient(
+            to bottom,
+            black calc(130% * var(--scroll-veil-progress, 1) - 30%),
+            transparent calc(130% * var(--scroll-veil-progress, 1))
+        );
+    }
 }
 .orbit-core-funnel svg {
     display: block;
@@ -2693,82 +2721,16 @@
     }
 }
 
-.orbit-prompt-portal {
+.orbit-launch__prompt {
     position: relative;
-    z-index: 50;
-}
-.orbit-prompt-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgb(0 0 0 / 65%);
-    backdrop-filter: blur(12px);
-    transition: opacity 180ms ease;
-}
-.orbit-prompt-viewport {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 20px;
-    overflow-y: auto;
-}
-.orbit-prompt-dialog {
-    --prompt-stripe-wash: color-mix(in srgb, var(--surface-void) 70%, transparent);
-    position: relative;
-    width: min(100%, 640px);
-    max-height: calc(100dvh - 40px);
-    overflow-y: auto;
-    padding: clamp(24px, 4vw, 40px);
-    border: 1px solid var(--line-hairline);
-    border-radius: 4px;
-    background-color: var(--surface-void);
-    background-image:
-        linear-gradient(var(--prompt-stripe-wash), var(--prompt-stripe-wash)),
-        var(--texture-button-stripes);
-    background-clip: padding-box;
-    color: var(--text-primary);
-    box-shadow: var(--shadow-panel);
-    transition: opacity 180ms ease;
-}
-.orbit-prompt-backdrop:is([data-starting-style], [data-ending-style]) {
-    opacity: 0;
-}
-.orbit-prompt-dialog:is([data-starting-style], [data-ending-style]) {
-    opacity: 0;
-}
-.orbit-prompt-dialog__title {
-    margin: 0;
-    padding-right: 32px;
-    font-size: 22px;
-    font-weight: 500;
-    letter-spacing: -0.035em;
-}
-.orbit-prompt-dialog__close {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 4px;
-    color: var(--text-muted);
-    cursor: pointer;
-}
-.orbit-prompt-dialog__close:hover {
-    background: var(--ink-a08);
-    color: var(--text-primary);
-}
-.orbit-prompt-dialog__close:focus-visible {
-    outline: 2px solid var(--text-primary);
-    outline-offset: 2px;
-}
-.orbit-prompt-dialog__text {
-    margin-top: 28px;
+    max-width: 480px;
+    text-align: center;
+    margin: 36px auto 0;
     padding: 14px 20px;
     border: 1px solid var(--line-default);
     border-radius: 4px;
-    background: var(--surface-card);
+    background-color: var(--space-1);
+    background-image: var(--texture-prompt-stripes);
     font-family: var(--font-code);
     font-size: 13px;
     line-height: 14px;
@@ -2776,14 +2738,500 @@
     overflow-wrap: anywhere;
     user-select: text;
 }
-.orbit-prompt-dialog__actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 24px;
+.orbit-launch__prompt .orbit-capability__corners > span {
+    border-color: var(--grey-2);
 }
-@media (prefers-reduced-motion: reduce) {
-    .orbit-prompt-backdrop,
-    .orbit-prompt-dialog {
-        transition: none;
+
+/* Compact layouts have their own camera and reading order. Desktop scenes keep
+   their original composition; phones show the useful detail at a readable size. */
+.orbit-mobile-menu__trigger {
+    display: none;
+}
+.orbit-mobile-menu[data-slot="sheet-content"] {
+    inset-inline: auto max(16px, env(safe-area-inset-right));
+    top: calc(72px + env(safe-area-inset-top));
+    bottom: auto;
+    width: min(420px, calc(100% - 32px));
+    max-height: calc(100dvh - 72px - var(--mobile-menu-clearance) - env(safe-area-inset-top));
+    overflow-y: auto;
+    gap: 0;
+    padding: 24px 24px 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: 22px;
+    color: var(--text-primary);
+    background: var(--space-1);
+    box-shadow: 0 24px 80px var(--black);
+}
+.orbit-mobile-menu__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0 24px;
+}
+.orbit-mobile-menu nav > a {
+    display: grid;
+    grid-template-columns: 20px 1fr 20px;
+    align-items: center;
+    gap: 12px;
+    min-height: 96px;
+    border-top: 1px solid var(--line-default);
+}
+.orbit-mobile-menu__index {
+    align-self: start;
+    padding-top: 29px;
+    color: var(--text-faint);
+    font: 10px var(--font-code);
+}
+.orbit-mobile-menu__label,
+.orbit-mobile-menu__detail {
+    display: block;
+}
+.orbit-mobile-menu__label {
+    font-size: 24px;
+    line-height: 1.2;
+    letter-spacing: -0.035em;
+}
+.orbit-mobile-menu__detail {
+    margin-top: 7px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.orbit-mobile-menu__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-default);
+}
+.orbit-mobile-menu__footer > a,
+.orbit-mobile-menu__close,
+.orbit-mobile-menu__trigger {
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 48px;
+    font: 11px var(--font-code);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.orbit-mobile-menu__footer > a,
+.orbit-mobile-menu__close {
+    display: flex;
+}
+.orbit-mobile-menu__close {
+    padding: 0 16px;
+    border: 1px solid var(--line-strong);
+    border-radius: 30px;
+    background: var(--text-primary);
+    color: var(--surface-void);
+    cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+    /* Leave the local development toolbar usable without covering navigation. */
+    :root:has(#laravel-toolbar-shadow-host) {
+        --mobile-menu-clearance: max(76px, env(safe-area-inset-bottom));
+    }
+    :root {
+        --dur-header-enter: 700ms;
+        --delay-hero-intro: 80ms;
+        --step-hero-intro: 160ms;
+        --dur-hero-enter: 420ms;
+        --blur-story-layer: 2px;
+    }
+    .orbit-story-header .orbit-story-nav,
+    .orbit-story-header .orbit-button {
+        display: none;
+    }
+    .orbit-page-starfield .orbit-starfield__stars {
+        transform: none;
+        will-change: auto;
+    }
+    .orbit-story-header {
+        transition:
+            transform 240ms var(--ease-standard),
+            backdrop-filter 260ms linear;
+    }
+    .orbit-story-header[data-header-hidden] {
+        transform: translateY(-100%);
+        pointer-events: none;
+    }
+    .orbit-story-header__inner > a:first-of-type {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+    .orbit-mobile-menu__trigger {
+        display: flex;
+        flex-shrink: 0;
+        width: 48px;
+        height: 48px;
+        margin-left: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--white);
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    .orbit-story-hero-shell,
+    .orbit-story-hero {
+        min-height: min(100svh, 1000px);
+    }
+    .orbit-story-hero__copy {
+        justify-content: flex-start;
+        padding-top: clamp(112px, 12svh, 160px);
+        padding-bottom: 280px;
+    }
+    [data-hero-content],
+    [data-hero-content][data-scroll-pinned] {
+        position: relative;
+        top: auto;
+        left: auto;
+        width: 100%;
+        transform: none;
+        text-align: left;
+    }
+    .orbit-story-hero__copy h1 {
+        max-width: 19ch;
+        margin-inline: 0;
+        font-size: clamp(44px, 7.5vw, 72px);
+        line-height: 1.03;
+    }
+    .orbit-story-hero__copy p {
+        max-width: 56ch;
+        margin-inline: 0;
+        font-size: 17px;
+    }
+    .orbit-story-hero__copy [data-cta] {
+        justify-content: flex-start;
+    }
+    .orbit-story-hero-shell[data-flowing] .orbit-story-constellation {
+        height: 100%;
+        overflow: hidden;
+    }
+    .orbit-story-constellation {
+        mask-image: linear-gradient(
+            to bottom,
+            transparent calc(100% - 310px),
+            #000 calc(100% - 200px),
+            #000 95%,
+            transparent
+        );
+    }
+    .orbit-story-constellation__inner {
+        width: 1160px;
+    }
+    .orbit-story-chapter__grid {
+        padding-block: 80px;
+    }
+    [data-chapter="topology"] .orbit-story-chapter__grid {
+        padding-bottom: clamp(80px, 10vw, 112px);
+    }
+    .orbit-capabilities__inner {
+        padding-top: clamp(64px, 8vw, 88px);
+    }
+    .orbit-story-chapter__visual svg:not([data-story-topology]) {
+        overflow: hidden;
+    }
+    [data-chapter="topology"] .orbit-story-chapter__copy,
+    [data-chapter="topology"] .orbit-story-chapter__copy > * {
+        position: relative;
+        z-index: 1;
+    }
+    .orbit-story-chapter__visual .orbit-laptop-scene {
+        max-width: none;
+    }
+    .orbit-story-chapter__visual [data-laptop] {
+        aspect-ratio: 710 / 665;
+    }
+    .orbit-server-scene {
+        aspect-ratio: 740 / 510;
+    }
+    [data-story-topology] {
+        aspect-ratio: 1080 / 900;
+    }
+    .orbit-environments__figure {
+        overflow: hidden;
+    }
+    .orbit-stack {
+        aspect-ratio: 930 / 640;
+    }
+    .orbit-foundation figure {
+        width: min(100%, 660px);
+    }
+    .orbit-environments__benefit-copy {
+        padding-top: 22px;
+    }
+    #top > footer {
+        padding-bottom: calc(88px + env(safe-area-inset-bottom));
+    }
+}
+
+@media (max-width: 900px) {
+    .orbit-story-chapter__grid {
+        gap: 0;
+    }
+    .orbit-story-chapter__copy {
+        display: contents;
+    }
+    .orbit-story-chapter__copy > * {
+        margin-inline: var(--gutter);
+    }
+    .orbit-story-chapter__copy [data-story-copy-part="label"] {
+        grid-row: 1;
+        margin-bottom: 18px;
+    }
+    .orbit-story-chapter__copy h2 {
+        grid-row: 2;
+        max-width: 22ch;
+        font-size: clamp(32px, 5.3vw, 46px);
+    }
+    .orbit-story-chapter__visual {
+        grid-row: 3;
+        width: 100%;
+        max-width: 700px;
+        justify-self: center;
+        padding: 0;
+        margin-block: 24px 0;
+    }
+    .orbit-story-chapter__copy [data-story-copy-part="body"] {
+        grid-row: 4;
+        margin-top: 24px;
+    }
+    .orbit-story-chapter__copy p {
+        max-width: none;
+    }
+    [data-chapter="problem"] .orbit-story-chapter__grid {
+        padding-bottom: 64px;
+    }
+    [data-chapter="premise"] .orbit-story-chapter__grid {
+        padding-top: 56px;
+    }
+    [data-story-topology] {
+        width: 100%;
+    }
+    .orbit-capabilities__grid {
+        margin-top: 40px;
+    }
+    .orbit-capability {
+        padding: 28px;
+    }
+    .orbit-capability__drawing--network {
+        aspect-ratio: 680 / 310;
+    }
+}
+
+@media (601px <= width <= 900px) {
+    .orbit-story-chapter__visual {
+        max-width: 620px;
+        margin-block: 0;
+    }
+    .orbit-story-chapter__copy [data-story-copy-part="body"] {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        align-items: start;
+        gap: 32px;
+    }
+    .orbit-story-chapter__copy [data-story-copy-part="body"] p + p {
+        margin-top: 0;
+        padding-left: 24px;
+        border-left: 1px solid var(--line-strong);
+    }
+    .orbit-capability:is([data-capability="wireguard"], [data-capability="doctor"]) {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        align-content: center;
+        column-gap: 28px;
+        border-right: 0;
+    }
+    .orbit-capability:is([data-capability="wireguard"], [data-capability="doctor"]) > svg {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        align-self: center;
+        margin: 12px 0;
+    }
+    .orbit-capability:is([data-capability="wireguard"], [data-capability="doctor"]) h3 {
+        margin-top: 12px;
+    }
+    .orbit-capability[data-capability="names"] {
+        border-right: 1px solid var(--line-default);
+    }
+    .orbit-capability[data-capability="store"] {
+        border-right: 0;
+    }
+    .orbit-capability[data-capability="agents"] {
+        border-right: 1px solid var(--line-default);
+    }
+}
+
+@media (max-width: 600px) {
+    .orbit-capabilities__inner {
+        padding-bottom: 72px;
+    }
+    .orbit-story-build {
+        padding-top: 72px;
+    }
+    .orbit-core-funnel svg {
+        height: 200px;
+    }
+    .orbit-story-hero__copy {
+        padding-top: 112px;
+        padding-bottom: 235px;
+    }
+    .orbit-story-hero__copy .orbit-label {
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        margin-bottom: 24px;
+    }
+    .orbit-story-hero__copy h1 {
+        max-width: 16ch;
+        font-size: clamp(37px, 10.8vw, 58px);
+    }
+    .orbit-story-hero__copy p {
+        margin-top: 24px;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    .orbit-story-hero__copy [data-cta] {
+        gap: 10px;
+        margin-top: 28px;
+    }
+    .orbit-story-hero__copy .orbit-button {
+        min-height: 46px;
+        padding-inline: 17px;
+        font-size: 10px;
+    }
+    .orbit-story-constellation__inner {
+        width: 780px;
+    }
+    .orbit-story-chapter__grid {
+        padding-top: 56px;
+        padding-bottom: 56px;
+    }
+    .orbit-story-chapter__visual {
+        margin-top: 28px;
+    }
+    .orbit-story-chapter__visual [data-laptop] {
+        aspect-ratio: 560 / 640;
+    }
+    .orbit-server-scene {
+        aspect-ratio: 1;
+    }
+    [data-story-topology] {
+        aspect-ratio: 780 / 850;
+    }
+    .orbit-story-chapter__copy [data-story-copy-part="body"] p + p {
+        margin-top: 20px;
+        padding-left: 16px;
+        border-left: 1px solid var(--line-strong);
+    }
+    .orbit-capabilities h2 {
+        text-align: left;
+        font-size: 34px;
+        max-width: 20ch;
+    }
+    .orbit-capabilities__inner > .orbit-label {
+        justify-self: start;
+    }
+    .orbit-capability {
+        overflow: hidden;
+        padding: 26px 24px 32px;
+    }
+    .orbit-capability h3 {
+        font-size: 25px;
+    }
+    .orbit-capability p {
+        font-size: 15px;
+    }
+    .orbit-capability__drawing.orbit-capability__drawing--network {
+        width: calc(100% + 48px);
+        max-width: none;
+        aspect-ratio: 460 / 310;
+        margin: -4px -24px 22px;
+    }
+    .orbit-capability__drawing.orbit-capability__drawing--doctor {
+        width: calc(100% + 48px);
+        aspect-ratio: 650 / 400;
+        margin: 0 -24px 22px;
+    }
+    .orbit-capability__drawing.orbit-capability__drawing--agents {
+        width: calc(100% + 48px);
+        margin: 0 -24px 24px;
+        min-height: 250px;
+        flex-grow: 0;
+    }
+    .orbit-capability__agent-scene {
+        width: 155%;
+        max-width: none;
+    }
+    .orbit-capability__drawing.orbit-capability__drawing--names,
+    .orbit-capability__drawing.orbit-capability__drawing--inventory {
+        width: calc(100% + 16px);
+        margin: 12px -8px 24px;
+    }
+    .orbit-capability__drawing.orbit-capability__drawing--log {
+        margin-block: 0 24px;
+    }
+    .orbit-stack {
+        aspect-ratio: 680 / 640;
+        width: 100%;
+    }
+    .orbit-environments__figure {
+        margin-inline: calc(-1 * var(--gutter));
+        margin-top: 28px;
+    }
+    .orbit-environments__benefits > article:nth-child(n) {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        align-items: start;
+        gap: 18px;
+        padding: 26px 22px;
+    }
+    .orbit-environments__benefit-copy {
+        padding-top: 0;
+    }
+    .orbit-environments__benefit-heading {
+        padding-top: 2px;
+    }
+    .orbit-owned-machine__intro {
+        text-align: left;
+    }
+    .orbit-foundation figure {
+        width: calc(100% + 64px);
+        max-width: none;
+        margin-inline: -32px;
+    }
+    .orbit-foundation__notes {
+        gap: 28px;
+    }
+    .orbit-foundation__notes--right [data-foundation-note] {
+        padding-left: 0;
+        padding-right: 22px;
+    }
+    .orbit-foundation__notes--right [data-foundation-note]::after {
+        left: auto;
+        right: 0;
+    }
+    .orbit-launch__intro {
+        font-size: 16px;
+    }
+    .orbit-story-install {
+        padding-top: 36px;
+    }
+}
+
+@media (max-width: 480px) {
+    .orbit-foundation__notes [data-foundation-note] {
+        padding: 28px 0 0;
+        border-top: 1px solid var(--line-strong);
+    }
+    .orbit-foundation__notes--left [data-foundation-note]:first-child {
+        padding-top: 0;
+        border-top: 0;
+    }
+    [data-foundation-note]::after {
+        display: none;
     }
 }

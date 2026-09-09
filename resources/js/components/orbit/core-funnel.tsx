@@ -1,17 +1,24 @@
+import { observeSceneActivity } from "./animation";
 import { useEffect, useRef } from "react";
+import { useScrollReveal, type RevealSequence } from "./use-scroll-reveal";
+
+const funnelSequence: RevealSequence = (section, add) => {
+    add(section, 0, undefined, "veil");
+};
 
 export function CoreFunnel({ inverted = false }: { inverted?: boolean }) {
     const ref = useRef<SVGSVGElement>(null);
+    const veilRef = useRef<HTMLDivElement>(null);
+    useScrollReveal(veilRef, funnelSequence, "build");
     useEffect(() => {
         const svg = ref.current;
         if (!svg) return;
         const paths = [...svg.querySelectorAll<SVGPathElement>("[data-funnel-lane]")];
         const signals = [...svg.querySelectorAll<SVGPathElement>("[data-funnel-signal]")];
         const motion = matchMedia("(prefers-reduced-motion: reduce)");
-        let visible = false;
+        let active = false;
         let animations: Animation[] = [];
         const updatePlayback = () => {
-            const active = visible && !document.hidden && !motion.matches;
             animations.forEach((animation) => {
                 if (active) animation.play();
                 else animation.pause();
@@ -26,7 +33,15 @@ export function CoreFunnel({ inverted = false }: { inverted?: boolean }) {
         };
         const draw = () => {
             cancelSignals();
-            const { width, height } = svg.getBoundingClientRect();
+            // Reveal transforms can temporarily scale the SVG to zero. Measure
+            // its layout box so resize/orientation changes never divide by zero.
+            const { width, height } = getComputedStyle(svg);
+            const layoutWidth = parseFloat(width);
+            const layoutHeight = parseFloat(height);
+            if (layoutWidth < 1 || layoutHeight < 1) return;
+            drawPaths(layoutWidth, layoutHeight);
+        };
+        const drawPaths = (width: number, height: number) => {
             const center = width / 2;
             const gap = width < 600 ? 4 : 7;
             const edgeInset = 0.5;
@@ -64,7 +79,7 @@ export function CoreFunnel({ inverted = false }: { inverted?: boolean }) {
                 const path = paths[index];
                 signal.setAttribute("d", path.getAttribute("d")!);
                 signal.setAttribute("transform", path.getAttribute("transform")!);
-                if (motion.matches) return;
+                if (motion.matches || !active) return;
                 const length = path.getTotalLength();
                 const dash = 18;
                 signal.style.strokeDasharray = `${dash} ${length + dash}`;
@@ -89,32 +104,28 @@ export function CoreFunnel({ inverted = false }: { inverted?: boolean }) {
                         animation.cancel();
                         run();
                     };
-                    updatePlayback();
+                    if (!active) animation.pause();
                 };
                 run(true);
             });
         };
-        const visibility = new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting;
-            updatePlayback();
+        const stop = observeSceneActivity(svg, (activity) => {
+            active = activity.active;
+            if (activity.reducedMotion || (active && !animations.length)) draw();
+            else updatePlayback();
         });
-        visibility.observe(svg);
-        document.addEventListener("visibilitychange", updatePlayback);
-        motion.addEventListener("change", draw);
         const resize = new ResizeObserver(draw);
         resize.observe(svg);
         draw();
         return () => {
             resize.disconnect();
-            visibility.disconnect();
-            document.removeEventListener("visibilitychange", updatePlayback);
-            motion.removeEventListener("change", draw);
+            stop();
             cancelSignals();
         };
     }, [inverted]);
 
     return (
-        <div className="orbit-core-funnel" aria-hidden="true">
+        <div ref={veilRef} className="orbit-core-funnel" aria-hidden="true">
             <svg ref={ref} data-core-funnel={inverted ? "expand" : "gather"}>
                 {Array.from({ length: 16 }, (_, index) => (
                     <path key={index} data-funnel-lane vectorEffect="non-scaling-stroke" />

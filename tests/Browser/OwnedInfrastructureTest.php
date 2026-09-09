@@ -2,7 +2,7 @@
 
 it('explains the Orbit core around equal square tiles with right-angle connections', function (int $width, bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
-    $page->assertSee('A steady core. An open fleet.')
+    $page->assertSee('A steady core. Swap the rest.')
         ->assertSee('Your applications')
         ->assertSee('Your machines')
         ->assertSee('Your tools')
@@ -25,7 +25,8 @@ it('explains the Orbit core around equal square tiles with right-angle connectio
         const plates = [...scene.querySelectorAll("[data-foundation-plate]")];
         const left = scene.querySelector(".orbit-foundation__notes--left").getBoundingClientRect();
         const right = scene.querySelector(".orbit-foundation__notes--right").getBoundingClientRect();
-        if (art.width > 601 || plates.length !== 8) return false;
+        const frameWidth = innerWidth <= 600 ? scene.getBoundingClientRect().width + 64 : innerWidth <= 1100 ? 660 : 600;
+        if (art.width > frameWidth + 1 || plates.length !== 8) return false;
         const faces = [...svg.querySelectorAll("[data-foundation-face]")];
         const tiles = faces.filter(face => !face.classList.contains("orbit-foundation__platform"));
         if (tiles.length !== 9 || !faces.every(face => face.width.baseVal.value === face.height.baseVal.value)) return false;
@@ -76,11 +77,16 @@ it('explains the Orbit core around equal square tiles with right-angle connectio
             if (!icon) return false;
             const box = icon.getBoundingClientRect();
             const bar = getComputedStyle(note, "::after");
-            return bar.width === "8px" && bar.boxSizing === "border-box"
-                && [bar.borderTopWidth, bar.borderRightWidth, bar.borderBottomWidth, bar.borderLeftWidth].every(width => width === "1px")
-                && bar.backgroundImage.includes("repeating-linear-gradient(135deg")
-                && bar.backgroundClip === "padding-box"
-                && (index < 3 ? bar.right : bar.left) === "0px"
+            const style = getComputedStyle(note);
+            const divider = innerWidth <= 480
+                ? bar.display === "none" && style.borderTopWidth === (index === 0 ? "0px" : "1px")
+                    && style.paddingLeft === "0px" && style.paddingRight === "0px"
+                : bar.width === "8px" && bar.boxSizing === "border-box"
+                    && [bar.borderTopWidth, bar.borderRightWidth, bar.borderBottomWidth, bar.borderLeftWidth].every(width => width === "1px")
+                    && bar.backgroundImage.includes("repeating-linear-gradient(135deg")
+                    && bar.backgroundClip === "padding-box"
+                    && (innerWidth <= 600 || index < 3 ? bar.right : bar.left) === "0px";
+            return divider
                 && box.width === 26 && box.height === 26 && box.bottom < title.top
                 && icon.getAttribute("aria-hidden") === "true";
         })) return false;

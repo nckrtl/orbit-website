@@ -2,24 +2,30 @@
 
 it('hands the visitor from the foundation to a ready-to-use agent prompt', function (int $width, bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
-    $page->click('Get started')
-        ->assertScript('location.hash', '#install')
-        ->assertSee('Get started with Orbit.')
+    if ($width <= 1100) {
+        $page->click('[aria-label="Open navigation menu"]')
+            ->click('[aria-label="Mobile navigation"] a[href="#install"]');
+    } else {
+        $page->click('Get started');
+    }
+    $page->assertScript('location.hash', '#install')
+        ->assertSee('Let your agent set it up.')
         ->assertDontSee('Open an agent session.')
         ->assertSee('Copy prompt')
-        ->assertSee('View prompt')
-        ->assertSee('Start a new session in your favorite agent and give it the prompt below to get started.')
+        ->assertDontSee('View prompt')
+        ->assertSee('No install script. Orbit is meant to be run by your agent, so setup starts the same way. Open a session in the agent you already use and hand it this prompt. The CLI is yours whenever you want it.')
         ->assertMissing('.orbit-launch__signoff')
         ->assertDontSee('Close the lid. Keep going.')
         ->assertDontSee('Your infrastructure')
         ->assertDontSee('Your move')
         ->assertMissing('.orbit-launch__context')
-        ->assertMissing('.orbit-launch__prompt');
+        ->assertVisible('[data-orbit-prompt]')
+        ->assertMissing('[role=dialog]');
 
     $page->assertScript('async () => {
         await document.fonts.ready;
         const root = document.querySelector("[data-install-finale]");
-        const contentFits = [...root.querySelectorAll("h2, .orbit-launch__intro, button")].every(el => {
+        const contentFits = [...root.querySelectorAll("h2, .orbit-launch__intro, [data-orbit-prompt], button")].every(el => {
             const box = el.getBoundingClientRect();
             return box.width > 0 && box.left >= 0 && box.right <= innerWidth && el.scrollWidth <= el.clientWidth + 1;
         });
@@ -52,7 +58,7 @@ it('copies the getting-started prompt with the absolute homepage URL using the k
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
 
-it('offers centered copy and striped preview buttons beneath the description', function () {
+it('offers one centered copy button beneath the inline prompt', function () {
     $page = visit('/', ['reducedMotion' => 'reduce']);
     $page->assertScript('() => {
         const section = document.querySelector("#install");
@@ -61,18 +67,15 @@ it('offers centered copy and striped preview buttons beneath the description', f
         const style = getComputedStyle(button);
         const box = button.getBoundingClientRect();
         const group = section.querySelector(".orbit-launch__actions").getBoundingClientRect();
-        const preview = actions[1];
+        const prompt = section.querySelector("[data-orbit-prompt]").getBoundingClientRect();
         const intro = section.querySelector(".orbit-launch__intro").getBoundingClientRect();
-        return actions.length === 2 && button.tagName === "BUTTON"
-            && preview.textContent === "View prompt"
-            && preview.classList.contains("orbit-button--outline")
-            && getComputedStyle(preview).backgroundImage.includes("repeating-linear-gradient")
+        return actions.length === 1 && button.tagName === "BUTTON"
             && parseFloat(style.borderRadius) >= box.height / 2
             && style.backgroundImage === "none"
             && style.backgroundColor === "rgb(255, 255, 255)"
             && style.color === "rgb(0, 0, 0)"
             && Math.abs(group.left + group.width / 2 - (intro.left + intro.width / 2)) < 1
-            && box.top > intro.bottom;
+            && prompt.top > intro.bottom && box.top > prompt.bottom;
     }', true)->assertDontSee('Prefer to read first?')
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
@@ -104,14 +107,17 @@ it('keeps the installation signal route attached to the core underside after res
 it('hands the falling trail to two fading dome signals on the same clock', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'no-preference'])->resize($width, 1000);
     $page->assertScript('document.querySelector(".orbit-launch__signal").getAnimations().length', 1);
-    $page->assertScript('async () => {
+    $page->script('async () => {
         await document.fonts.ready;
+        // Let viewport and font measurements settle before choosing the scroll target.
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
         const handoff = document.querySelector(".orbit-launch__handoff").getBoundingClientRect();
         window.scrollTo({top: scrollY + handoff.top - 500, behavior: "instant"});
         await new Promise(requestAnimationFrame);
         await new Promise(requestAnimationFrame);
-        return document.querySelector("[data-install-finale]").dataset.active === "true";
-    }', true);
+    }');
+    $page->assertAttribute('[data-install-finale]', 'data-active', 'true');
     $page->script('() => {
         window.seekInstallSignal = position => {
             const root = document.querySelector("[data-install-finale]");
@@ -206,7 +212,7 @@ it('copies the Orbit prompt when the clipboard API is unavailable', function () 
         ->assertNoJavaScriptErrors();
 });
 
-it('previews the exact copied prompt in an accessible dialog', function (int $width, bool $fallback) {
+it('displays the exact copied prompt inline without a dialog', function (int $width, bool $fallback) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
     $page->script('window.copiedOrbitText = null');
     if ($fallback) {
@@ -221,41 +227,60 @@ it('previews the exact copied prompt in an accessible dialog', function (int $wi
     } else {
         $page->script('Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async text=>{window.copiedOrbitText=text}}})');
     }
-    $page->click('View prompt')->assertVisible('[role=dialog]')
-        ->assertSee('Getting started prompt')
+    $page->script('document.querySelector("#install").scrollIntoView({block:"center",behavior:"instant"})');
+    $page->assertVisible('[data-orbit-prompt]')
+        ->assertMissing('[role=dialog]')
+        ->assertDontSee('View prompt')
         ->assertScript('window.copiedOrbitText', null)
         ->assertScript('() => {
-            const dialog=document.querySelector("[role=dialog]");
-            const box=dialog.getBoundingClientRect();
-            return dialog.contains(document.activeElement)
-                && document.getElementById(dialog.getAttribute("aria-labelledby")).textContent==="Getting started prompt"
-                && box.left>=0 && box.right<=innerWidth && box.top>=0 && box.bottom<=innerHeight
-                && dialog.scrollWidth<=dialog.clientWidth
-                && getComputedStyle(dialog).borderRadius==="4px"
-                && getComputedStyle(dialog.querySelector("[data-orbit-prompt]")).borderRadius==="4px"
-                && getComputedStyle(dialog.querySelector("code")).fontFamily.includes("JetBrains Mono")
-                && getComputedStyle(dialog).backgroundImage.includes("repeating-linear-gradient")
-                && (() => {
-                    const button=dialog.querySelector(".orbit-button"), code=dialog.querySelector("[data-orbit-prompt]");
-                    const style=getComputedStyle(code);
-                    const brightness=el=>getComputedStyle(el).backgroundColor.match(/[\d.]+/g).slice(0,3).reduce((sum,n)=>sum+Number(n),0);
-                    return parseFloat(getComputedStyle(button).borderRadius)>=button.getBoundingClientRect().height/2
-                        && brightness(code)>brightness(dialog)
-                        && parseFloat(style.paddingTop)<parseFloat(style.paddingLeft)
-                        && parseFloat(style.lineHeight)===parseFloat(style.paddingTop)
-                        && code.textContent.split(String.fromCharCode(10)).length>=3;
-                })();
+            const prompt=document.querySelector("[data-orbit-prompt]");
+            const box=prompt.getBoundingClientRect();
+            const style=getComputedStyle(prompt);
+            const button=document.querySelector("[aria-label=\"Copy Orbit getting-started prompt\"]");
+            return box.left>=0 && box.right<=innerWidth
+                && prompt.scrollWidth<=prompt.clientWidth+1
+                && prompt.querySelectorAll("[data-corner]").length===4
+                && style.borderRadius==="4px"
+                && getComputedStyle(prompt.querySelector("code")).fontFamily.includes("JetBrains Mono")
+                && parseFloat(style.paddingTop)<parseFloat(style.paddingLeft)
+                && parseFloat(style.lineHeight)===parseFloat(style.paddingTop)
+                && prompt.textContent.split(String.fromCharCode(10)).length===3
+                && button.getBoundingClientRect().top > box.bottom;
         }', true);
-    $page->click('[aria-label="Copy displayed prompt"]')
+    $page->click('[aria-label="Copy Orbit getting-started prompt"]')
         ->assertSee('Copied')
         ->assertScript('window.copiedOrbitText===document.querySelector("[data-orbit-prompt]").textContent', true)
         ->assertScript('window.copiedOrbitText===`Go to ${location.origin}.\n\nGuide me through getting started with Orbit.`', true)
-        ->assertScript('document.querySelector("[role=dialog]").contains(document.activeElement)', true);
-    $page->keys('[aria-label="Copy displayed prompt"]', 'Escape')
-        ->assertMissing('[role=dialog]')
-        ->assertScript('document.activeElement.textContent', 'View prompt');
-    $page->keys('View prompt', 'Enter')->assertVisible('[role=dialog]')
-        ->click('[aria-label="Close prompt"]')->assertMissing('[role=dialog]')
-        ->assertScript('document.activeElement.textContent', 'View prompt')
+        ->assertScript('document.activeElement.getAttribute("aria-label")', 'Copy Orbit getting-started prompt')
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => [2135, false], 'mobile' => [390, false], 'small mobile fallback' => [320, true]]);
+
+it('moves the upward-facing footer ticks sideways with scroll and respects reduced motion', function (int $width, bool $reduced) {
+    $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
+    $page->assertScript('async () => {
+        await document.fonts.ready;
+        const ruler = document.querySelector("[data-install-ruler]");
+        const marks = ruler.querySelector(".orbit-story-ruler__marks");
+        const reference = document.querySelector("[data-story-divider] .orbit-story-ruler__marks");
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const settle = async () => { await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); };
+        scrollTo({top:document.documentElement.scrollHeight,behavior:"instant"});
+        await settle();
+        const startY = scrollY;
+        const start = parseFloat(getComputedStyle(marks).backgroundPositionX);
+        const style = getComputedStyle(marks);
+        if (style.backgroundImage !== getComputedStyle(reference).backgroundImage
+            || style.backgroundSize !== "60px 7px, 60px 15px"
+            || style.backgroundPositionY !== "100%, 100%"
+            || Math.abs(ruler.getBoundingClientRect().bottom - document.querySelector("footer").getBoundingClientRect().top) > 1) return false;
+        scrollTo({top:startY-200,behavior:"instant"});
+        await settle();
+        const up = parseFloat(getComputedStyle(marks).backgroundPositionX);
+        if (Math.abs(up-start-(reduced ? 0 : (startY-scrollY)*.45)) > .1) return false;
+        scrollTo({top:startY,behavior:"instant"});
+        await settle();
+        return Math.abs(parseFloat(getComputedStyle(marks).backgroundPositionX)-start)<.1
+            && (!reduced || start===0)
+            && document.documentElement.scrollWidth<=innerWidth;
+    }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
+})->with(['desktop' => [1906, false], 'mobile' => [390, false], 'reduced motion' => [1440, true]]);

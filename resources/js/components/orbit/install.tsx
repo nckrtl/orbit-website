@@ -1,11 +1,14 @@
+import { CardCorners } from "./card-corners";
 import { useId } from "react";
-import { Dialog } from "@base-ui/react/dialog";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { CopyButton } from "./primitives";
 import { useInstallSignal } from "./use-install-signal";
+import { useScrollReveal } from "./use-scroll-reveal";
+import { installSequence } from "./finale-reveal";
 
 export function Install({ orbitUrl }: { orbitUrl: string }) {
     const ref = useInstallSignal();
+    useScrollReveal(ref, installSequence, "install");
     const prompt = `Go to ${orbitUrl}.\n\nGuide me through getting started with Orbit.`;
     const waveId = useId();
 
@@ -46,12 +49,17 @@ export function Install({ orbitUrl }: { orbitUrl: string }) {
 
             <section id="install" className="orbit-story-install" aria-labelledby="install-title">
                 <div className="orbit-label">Get started</div>
-                <h2 id="install-title">Get started with Orbit.</h2>
+                <h2 id="install-title">Let your agent set it up.</h2>
                 <p className="orbit-launch__intro">
-                    Start a new session in your favorite agent and give it the prompt below to get
-                    started.
+                    No install script. Orbit is meant to be run by your agent, so setup starts the
+                    same way. Open a session in the agent you already use and hand it this prompt.
+                    The CLI is yours whenever you want it.
                 </p>
 
+                <pre className="orbit-launch__prompt" data-orbit-prompt>
+                    <CardCorners />
+                    <code className="language-markdown">{prompt}</code>
+                </pre>
                 <div className="orbit-launch__actions">
                     <CopyButton
                         command={prompt}
@@ -59,43 +67,15 @@ export function Install({ orbitUrl }: { orbitUrl: string }) {
                         ariaLabel="Copy Orbit getting-started prompt"
                         variant="solid"
                     />
-                    <Dialog.Root>
-                        <Dialog.Trigger className="orbit-button orbit-button--outline orbit-button--lg">
-                            View prompt
-                        </Dialog.Trigger>
-                        <Dialog.Portal className="orbit-prompt-portal">
-                            <Dialog.Backdrop className="orbit-prompt-backdrop" />
-                            <Dialog.Viewport className="orbit-prompt-viewport">
-                                <Dialog.Popup className="orbit-prompt-dialog">
-                                    <Dialog.Title className="orbit-prompt-dialog__title">
-                                        Getting started prompt
-                                    </Dialog.Title>
-                                    <Dialog.Description hidden>
-                                        Paste this into a new session in your favorite agent.
-                                    </Dialog.Description>
-                                    <Dialog.Close
-                                        className="orbit-prompt-dialog__close"
-                                        aria-label="Close prompt"
-                                    >
-                                        <X size={18} strokeWidth={1.5} />
-                                    </Dialog.Close>
-                                    <pre className="orbit-prompt-dialog__text" data-orbit-prompt>
-                                        <code className="language-markdown">{prompt}</code>
-                                    </pre>
-                                    <div className="orbit-prompt-dialog__actions">
-                                        <CopyButton
-                                            command={prompt}
-                                            label="Copy prompt"
-                                            ariaLabel="Copy displayed prompt"
-                                            variant="solid"
-                                        />
-                                    </div>
-                                </Dialog.Popup>
-                            </Dialog.Viewport>
-                        </Dialog.Portal>
-                    </Dialog.Root>
                 </div>
             </section>
+            <div
+                className="orbit-story-ruler orbit-story-ruler--bottom"
+                data-install-ruler
+                aria-hidden="true"
+            >
+                <div className="orbit-story-ruler__marks" />
+            </div>
         </div>
     );
 }

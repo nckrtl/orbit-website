@@ -35,26 +35,38 @@ export function useInstallSignal() {
         let animations: Animation[] = [];
         let frame = 0;
         let paintFrame = 0;
-        let paintDome: (() => void) | undefined;
+        let paintTimer: ReturnType<typeof setTimeout> | undefined;
+        let paintDome: (() => number) | undefined;
 
         const paint = () => {
             paintFrame = 0;
-            paintDome?.();
-            if (root.dataset.active === "true") paintFrame = requestAnimationFrame(paint);
+            const wait = paintDome?.() ?? 0;
+            if (root.dataset.active !== "true" || !paintDome) return;
+            if (wait > 0) {
+                paintTimer = setTimeout(() => {
+                    paintTimer = undefined;
+                    paintFrame = requestAnimationFrame(paint);
+                }, wait);
+            } else paintFrame = requestAnimationFrame(paint);
         };
 
         const updatePlayback = () => {
             const active = visible && !document.hidden && !motion.matches;
             root.dataset.active = String(active);
             animations.forEach((animation) => (active ? animation.play() : animation.pause()));
-            if (active && !paintFrame) paintFrame = requestAnimationFrame(paint);
-            else if (!active && paintFrame) {
+            if (active && !paintFrame && paintTimer === undefined)
+                paintFrame = requestAnimationFrame(paint);
+            else if (!active) {
+                clearTimeout(paintTimer);
+                paintTimer = undefined;
                 cancelAnimationFrame(paintFrame);
                 paintFrame = 0;
             }
         };
         const cancel = () => {
             animations.forEach((animation) => animation.cancel());
+            clearTimeout(paintTimer);
+            paintTimer = undefined;
             animations = [];
             paintDome = undefined;
         };
@@ -162,9 +174,11 @@ export function useInstallSignal() {
             // Keep the gradient's transparent tail and bright head on the curve.
             // Only its endpoints need updating; the browser animates the stroke.
             paintDome = () => {
-                if (typeof descent.currentTime !== "number") return;
+                if (typeof descent.currentTime !== "number") return 100;
                 const elapsed = (descent.currentTime % duration) - fall;
-                if (elapsed < 0 || elapsed > spread) return;
+                // No frame callbacks during descent or the pause between waves.
+                if (elapsed < 0) return -elapsed;
+                if (elapsed > spread) return duration - elapsed;
                 const head = (travel * elapsed) / spread;
                 paths.forEach((path, index) => {
                     const from = path.getPointAtLength(Math.max(0, head - trail));
@@ -175,6 +189,7 @@ export function useInstallSignal() {
                     gradient.setAttribute("x2", String(to.x));
                     gradient.setAttribute("y2", String(to.y));
                 });
+                return 0;
             };
             const flash = arrival.animate(
                 [
