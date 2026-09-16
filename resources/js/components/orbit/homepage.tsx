@@ -317,7 +317,6 @@ function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
                             center={{ label: "", sub: "" }}
                             nodes={heroNodes}
                             speed={1.1}
-                            packetSize={1.1}
                         />
                     </div>
                 </div>
@@ -328,7 +327,7 @@ function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
                 <div className="orbit-story-blur orbit-story-blur--solid" aria-hidden="true" />
                 <section data-hero className="orbit-story-hero__copy">
                     <div className="max-w-[min(62ch,60%)]">
-                        <div className="orbit-label mb-5">
+                        <div className="mb-5 font-mono text-[10.5px] leading-[1.58] font-normal tracking-[0.16em] text-orbit-muted uppercase">
                             Open source · self-hosted · agent-driven
                         </div>
                         <h1 className="max-w-[24ch] text-[clamp(38px,4vw,64px)] leading-[0.98] font-medium tracking-[-0.035em]">
@@ -339,7 +338,7 @@ function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
                             network — provisioned, routed, and repaired by your agent, reachable
                             from every device you carry.
                         </p>
-                        <div className="mt-8 flex flex-wrap gap-4">
+                        <div data-cta className="mt-8 flex flex-wrap gap-4">
                             <ButtonLink href="#story">Read the story</ButtonLink>
                             <ButtonLink href="#install" variant="outline">
                                 Quickstart

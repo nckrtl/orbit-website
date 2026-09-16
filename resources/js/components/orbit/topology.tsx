@@ -1,4 +1,4 @@
-import type { HTMLAttributes, KeyboardEvent } from "react";
+import type { CSSProperties, HTMLAttributes, KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type OrbitStats = {
@@ -44,7 +44,6 @@ type OrbitDiagramProps = Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> & {
     onSelect?: (key: string) => void;
     operator?: string | null;
     orbit?: boolean;
-    packetSize?: number;
     packets?: boolean;
     selected?: string | null;
     showCenter?: boolean;
@@ -167,30 +166,42 @@ function SelectionCore({ selected, radius, x, y }: Point & { radius: number; sel
 
 function SignalPacket({
     from,
-    packetSize,
     phase,
+    rate = 0.3,
     time,
     to,
 }: {
     from: Point;
-    packetSize: number;
     phase: number;
+    rate?: number;
     time: number;
     to: Point;
 }) {
-    const progress = (time * 0.3 + phase) % 1;
-    const x = from.x + (to.x - from.x) * progress;
-    const y = from.y + (to.y - from.y) * progress;
+    const progress = (time * rate + phase) % 1;
+    const envelope = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const tail = Math.min(0.3, 26 / Math.max(1, Math.hypot(dx, dy)));
 
-    return (
-        <circle
-            cx={x}
-            cy={y}
-            r={packetSize}
-            fill="var(--bone-3)"
-            opacity={0.35 + Math.sin(progress * Math.PI) * 0.65}
-        />
-    );
+    return Array.from({ length: 14 }, (_, index) => {
+        const start = Math.max(0, progress - (tail * (index + 1)) / 14);
+        const end = Math.max(0, progress - (tail * index) / 14);
+        const fade = 1 - index / 14;
+
+        return end > 0 ? (
+            <line
+                key={index}
+                x1={from.x + dx * start}
+                y1={from.y + dy * start}
+                x2={from.x + dx * end}
+                y2={from.y + dy * end}
+                stroke="var(--bone-3)"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+                opacity={(0.16 + envelope * 0.72) * fade * fade}
+            />
+        ) : null;
+    });
 }
 
 function Telemetry({
@@ -198,14 +209,14 @@ function Telemetry({
     label,
     point,
     pulse,
-    side,
+    scale,
     stats,
 }: {
     ip: string;
     label: string;
     point: Point;
     pulse: number;
-    side?: "left" | "right";
+    scale: number;
     stats?: OrbitStats;
 }) {
     const value = hash(label);
@@ -218,19 +229,17 @@ function Telemetry({
         3,
         Math.round((stats?.ping ?? 8 + (value % 42)) + ((value + pulse * 104729) % 7) - 3),
     );
-    const right = side ? side === "right" : point.x < centerX;
-    const x = point.x + (right ? 13 : -13);
-    const anchor = right ? "start" : "end";
+    const step = 13 / scale;
 
     return (
-        <g pointerEvents="none" className="orbit-telemetry">
-            <text x={x} y={point.y - 9} textAnchor={anchor} className="orbit-diagram-label">
+        <g pointerEvents="none" className="orbit-telemetry" data-telemetry={label}>
+            <text x={point.x} y={point.y} className="orbit-telemetry-ping">
                 {ping}ms
             </text>
-            <text x={x} y={point.y + 3} textAnchor={anchor} className="orbit-diagram-meta">
+            <text x={point.x} y={point.y + step} className="orbit-telemetry-usage">
                 c{cpu} m{memory} d{disk}
             </text>
-            <text x={x} y={point.y + 15} textAnchor={anchor} className="orbit-diagram-meta">
+            <text x={point.x} y={point.y + step * 2} className="orbit-telemetry-address">
                 {stats?.ip ?? ip}
             </text>
         </g>
@@ -247,7 +256,123 @@ function inStatsZone(point: Point, zone?: number[]) {
         return withinX;
     }
 
-    return withinX && point.y >= zone[2] * height && point.y <= zone[3] * height;
+    return (
+        withinX &&
+        point.y >= 14 + zone[2] * (height - 32) &&
+        point.y <= 14 + zone[3] * (height - 32)
+    );
+}
+
+type Box = { x1: number; x2: number; y1: number; y2: number };
+
+// Claim names first, then gateway/node/satellite readouts, as in the design export.
+function placeTelemetry(
+    nodes: PlacedNode[],
+    center: OrbitCenter | null,
+    labels: boolean,
+    scale: number,
+    zone?: number[],
+) {
+    const boxes: Box[] = [];
+    const positions = new Map<string, Point>();
+    const reserve = (box: Box) => boxes.push(box);
+
+    if (labels) {
+        if (center)
+            reserve({ x1: centerX - 46, y1: centerY - 32, x2: centerX + 46, y2: centerY - 6 });
+        for (const node of nodes) {
+            if (node.satellites.length) {
+                reserve({
+                    x1: node.x - 52,
+                    y1: node.y - satelliteRadiusY - 26,
+                    x2: node.x + 52,
+                    y2: node.y - satelliteRadiusY - 2,
+                });
+                if (node.cluster)
+                    reserve({
+                        x1: node.x - 52,
+                        y1: node.y + satelliteRadiusY + 12,
+                        x2: node.x + 52,
+                        y2: node.y + satelliteRadiusY + 24,
+                    });
+            } else {
+                const right = node.x >= centerX;
+                reserve({
+                    x1: node.x + (right ? 10 : -58),
+                    y1: node.y - 9,
+                    x2: node.x + (right ? 58 : -10),
+                    y2: node.y + 18,
+                });
+            }
+            for (const satellite of node.satellites) {
+                reserve({
+                    x1: satellite.x - 26,
+                    y1: satellite.y - 15,
+                    x2: satellite.x + 26,
+                    y2: satellite.y - 4,
+                });
+            }
+        }
+    }
+
+    const place = (
+        key: string,
+        point: Point,
+        gap: number,
+        side?: "left" | "right",
+        offsetY = 0,
+    ) => {
+        if (!inStatsZone(point, zone)) return;
+
+        const step = 13 / scale;
+        const blockWidth = 52;
+        const lo = zone && zone.length >= 2 ? zone[0] * width : 6;
+        const hi = zone && zone.length >= 2 ? zone[1] * width : width - 6;
+        const right = side ? side === "right" : point.x + gap + blockWidth <= hi;
+        const x = Math.max(
+            lo,
+            Math.min(hi - blockWidth, right ? point.x + gap : point.x - gap - blockWidth),
+        );
+        const y = point.y - step + 3.2 / scale + offsetY;
+        const box = { x1: x - 2, y1: y - step - 3, x2: x + blockWidth + 2, y2: y + step * 2 + 4 };
+        if (
+            boxes.some(
+                (other) =>
+                    !(
+                        box.x2 < other.x1 ||
+                        box.x1 > other.x2 ||
+                        box.y2 < other.y1 ||
+                        box.y1 > other.y2
+                    ),
+            )
+        )
+            return;
+
+        reserve(box);
+        positions.set(key, { x, y });
+    };
+
+    if (center && center.state !== "pending") {
+        place("gateway", { x: centerX, y: centerY }, 15, undefined, labels ? 26 : 0);
+    }
+    for (const node of nodes) {
+        place(
+            `node:${node.label}`,
+            node,
+            13,
+            labels && !node.satellites.length ? (node.x >= centerX ? "left" : "right") : undefined,
+        );
+    }
+    // The export's unlabelled constellation displays gateway and node readouts only.
+    if (!labels) return positions;
+
+    for (const node of nodes) {
+        for (const satellite of node.satellites) {
+            place(`sat:${node.label}/${satellite.label}`, satellite, 9, undefined, labels ? 10 : 0);
+        }
+    }
+
+    return positions;
 }
 
 export function OrbitDiagram({
@@ -259,19 +384,33 @@ export function OrbitDiagram({
     onSelect,
     operator = null,
     orbit = true,
-    packetSize = 1.5,
     packets = true,
     selected = null,
     showCenter = true,
     speed = 2.2,
     stats = false,
     statsZone,
+    style,
     ...props
 }: OrbitDiagramProps) {
     const [time, setTime] = useState(0);
     const [pulse, setPulse] = useState(0);
     const reducedMotion = usePrefersReducedMotion();
     const startTime = useRef<number | null>(null);
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const [scale, setScale] = useState(1);
+
+    useEffect(() => {
+        const element = wrapRef.current;
+        if (!element) return;
+
+        const observer = new ResizeObserver(() => {
+            const drawnWidth = element.getBoundingClientRect().width;
+            if (drawnWidth > 0) setScale(drawnWidth / width);
+        });
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         if (!orbit || reducedMotion) {
@@ -349,9 +488,17 @@ export function OrbitDiagram({
     const centerVisible = showCenter && center !== null;
     const centerPending = centerVisible && center.state === "pending";
     const interactive = Boolean(onSelect);
+    const readouts = stats
+        ? placeTelemetry(placed, centerVisible ? center : null, labels, scale, statsZone)
+        : new Map<string, Point>();
 
     return (
-        <div className={`w-full ${className}`} {...props}>
+        <div
+            ref={wrapRef}
+            className={`w-full ${className}`}
+            style={{ "--orbit-diagram-scale": scale, ...style } as CSSProperties}
+            {...props}
+        >
             <svg
                 viewBox="0 14 520 308"
                 width="100%"
@@ -390,8 +537,8 @@ export function OrbitDiagram({
                             <SignalPacket
                                 from={{ x: 36, y: 38 }}
                                 to={{ x: centerX - 16, y: centerY - 8 }}
-                                packetSize={packetSize}
                                 phase={0.1}
+                                rate={0.24}
                                 time={time}
                             />
                         ) : null}
@@ -450,7 +597,6 @@ export function OrbitDiagram({
                                 <SignalPacket
                                     from={{ x: centerX, y: centerY }}
                                     to={nodePoint}
-                                    packetSize={packetSize}
                                     phase={(node.index * 0.37) % 1}
                                     time={time}
                                 />
@@ -505,9 +651,9 @@ export function OrbitDiagram({
                                             <SignalPacket
                                                 from={nodePoint}
                                                 to={satellitePoint}
-                                                packetSize={packetSize}
                                                 phase={(index * 0.4) % 1}
-                                                time={time * 1.4}
+                                                rate={0.5}
+                                                time={time}
                                             />
                                         ) : null}
                                         <circle
@@ -527,6 +673,7 @@ export function OrbitDiagram({
                                                     : "var(--bone-1)"
                                             }
                                             strokeWidth="1"
+                                            vectorEffect="non-scaling-stroke"
                                         />
                                         <Globe
                                             x={satellite.x}
@@ -552,10 +699,11 @@ export function OrbitDiagram({
                                                 {(satellite.role || satellite.label).toUpperCase()}
                                             </text>
                                         ) : null}
-                                        {stats && inStatsZone(satellitePoint, statsZone) ? (
+                                        {readouts.has(satelliteKey) ? (
                                             <Telemetry
                                                 label={`${node.label}/${satellite.label}`}
-                                                point={satellitePoint}
+                                                point={readouts.get(satelliteKey)!}
+                                                scale={scale}
                                                 pulse={pulse}
                                                 stats={satellite.stats}
                                                 ip={
@@ -569,6 +717,7 @@ export function OrbitDiagram({
                                 );
                             })}
                             <g
+                                data-orbit-node={node.label}
                                 role={interactive ? "button" : undefined}
                                 tabIndex={interactive ? 0 : undefined}
                                 aria-label={interactive ? `Inspect ${node.label}` : undefined}
@@ -593,9 +742,10 @@ export function OrbitDiagram({
                                               ? "var(--signal-warn)"
                                               : node.state === "error"
                                                 ? "var(--signal-error)"
-                                                : "var(--bone-1)"
+                                                : "var(--bone-3)"
                                     }
                                     strokeWidth="1"
+                                    vectorEffect="non-scaling-stroke"
                                 />
                                 <Globe
                                     x={node.x}
@@ -667,20 +817,14 @@ export function OrbitDiagram({
                                     {node.cluster.toUpperCase()}
                                 </text>
                             ) : null}
-                            {stats && inStatsZone(nodePoint, statsZone) ? (
+                            {readouts.has(nodeKey) ? (
                                 <Telemetry
                                     label={node.label}
-                                    point={nodePoint}
+                                    point={readouts.get(nodeKey)!}
+                                    scale={scale}
                                     pulse={pulse}
                                     stats={node.stats}
                                     ip={addresses.get(node.label) ?? "10.1.0.2"}
-                                    side={
-                                        labels && !node.satellites.length
-                                            ? node.x >= centerX
-                                                ? "left"
-                                                : "right"
-                                            : undefined
-                                    }
                                 />
                             ) : null}
                         </g>
@@ -714,6 +858,7 @@ export function OrbitDiagram({
                                       : "var(--bone-1)"
                             }
                             strokeWidth="1"
+                            vectorEffect="non-scaling-stroke"
                             strokeDasharray={centerPending ? "3 4" : undefined}
                         />
                         {centerPending ? null : (
@@ -734,12 +879,11 @@ export function OrbitDiagram({
                                 />
                             </>
                         )}
-                        {stats &&
-                        !centerPending &&
-                        inStatsZone({ x: centerX, y: centerY }, statsZone) ? (
+                        {readouts.has("gateway") ? (
                             <Telemetry
                                 label={center.label || "gateway"}
-                                point={{ x: centerX, y: centerY + (labels ? 26 : 0) }}
+                                point={readouts.get("gateway")!}
+                                scale={scale}
                                 pulse={pulse}
                                 stats={center.stats}
                                 ip="10.1.0.1"
