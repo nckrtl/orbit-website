@@ -240,11 +240,11 @@ it('moves both ticked dividers left on downward scroll and reverses upward', fun
 it('renders the Orbit story homepage without javascript or console errors', function () {
     $page = visit('/', ['reducedMotion' => 'reduce']);
 
-    $page->assertSee('Build your ideas on machines you own, run by your agent.')
+    $page->assertSee('Build ideas faster on machines you own, run by your agent.')
         ->assertSee('Local development stops when your laptop does.')
         ->assertSee('Move the work. Keep the control.')
         ->assertSee('Start with one machine. Make room for what’s next.')
-        ->assertSee('What it takes to trust an agent with your fleet.')
+        ->assertSee('The foundation for the nodes and apps you run.')
         ->assertSee('Your favorite place to build.')
         ->assertSee('A steady core. Swap the rest.')
         ->assertSee('Let your agent set it up.')
@@ -258,6 +258,38 @@ it('renders the Orbit story homepage without javascript or console errors', func
         ->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 });
+
+it('presents each chapter aside as an italic striped blockquote', function (int $width) {
+    $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
+
+    $page->assertScript('() => {
+        const quotes = [...document.querySelectorAll("[data-story-quote]")];
+        const foundationStripe = getComputedStyle(document.querySelector("[data-foundation-note]"), "::after");
+
+        return quotes.length === 3 && quotes.every(quote => {
+            const body = quote.parentElement.querySelector(":scope > p");
+            const quoteStyle = getComputedStyle(quote);
+            const bodyStyle = getComputedStyle(body);
+            const stripe = getComputedStyle(quote, "::before");
+            const expectedMargin = innerWidth > 600 && innerWidth <= 900 ? "0px" : "24px";
+
+            return quote.tagName === "BLOCKQUOTE"
+                && quoteStyle.fontStyle === "italic"
+                && quoteStyle.fontSize === bodyStyle.fontSize
+                && quoteStyle.marginTop === expectedMargin
+                && quoteStyle.paddingBottom === "2px"
+                && quoteStyle.paddingLeft === "22px"
+                && stripe.width === "6px"
+                && stripe.width === foundationStripe.width
+                && stripe.borderLeftWidth === foundationStripe.borderLeftWidth
+                && stripe.borderLeftColor === foundationStripe.borderLeftColor
+                && stripe.backgroundImage === foundationStripe.backgroundImage
+                && stripe.content !== "none";
+        });
+    }', true)
+        ->assertNoJavaScriptErrors()
+        ->assertNoConsoleLogs();
+})->with(['desktop' => 1767, 'tablet' => 768, 'mobile' => 390]);
 
 it('keeps homepage typography and topology details at the reference scale', function (int $width, int $height) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, $height);
@@ -504,87 +536,33 @@ it('keeps the network anchored while its nodes and signals animate', function (i
     'mobile' => [390, 844],
 ]);
 
-it('turns the stars gently with scrolling and respects reduced motion', function (bool $reduced) {
+it('keeps the star texture covered while scrolling before JavaScript animation frames run', function (bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize(1440, 1000);
-    $page->script('document.querySelector("#story").scrollIntoView({ behavior: "instant" })');
-    $page->assertScript('async () => {
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const field = document.querySelector("[data-page-stars]");
-        window.starScrollStart = scrollY;
-        window.starAngleStart = parseFloat(field.style.getPropertyValue("--starfield-rotation"));
-        window.storyHeadingLeft = document.querySelector("[data-chapter=problem] h2").getBoundingClientRect().left;
-        return Number.isFinite(window.starAngleStart);
-    }', true);
-    $page->script('window.scrollTo({ top: window.starScrollStart + 500, behavior: "instant" })');
-    $page->assertScript('async () => {
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const field = document.querySelector("[data-page-stars]");
-        const stars = field.querySelector(".orbit-starfield__stars");
-        const angle = parseFloat(field.style.getPropertyValue("--starfield-rotation"));
-        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-        const bounds = field.getBoundingClientRect();
-        const plane = stars.getBoundingClientRect();
-        return (reduced ? angle === 0 && getComputedStyle(stars).transform === "none"
-            : angle > window.starAngleStart && angle - window.starAngleStart < 1 && Math.abs(angle) <= 6)
-            && plane.left <= bounds.left && plane.right >= bounds.right
-            && plane.top <= Math.max(0, bounds.top) && plane.bottom >= Math.min(innerHeight, bounds.bottom)
-            && document.querySelector("[data-chapter=problem] h2").getBoundingClientRect().left === window.storyHeadingLeft;
-    }', true)->assertScript('async () => {
-        const field = document.querySelector("[data-page-stars]");
-        const angle = field.style.getPropertyValue("--starfield-rotation");
-        await new Promise(resolve => setTimeout(resolve, 200));
-        return field.style.getPropertyValue("--starfield-rotation") === angle;
-    }', true);
-    $page->script('window.scrollTo({ top: window.starScrollStart, behavior: "instant" })');
-    $page->assertScript('() => Math.abs(parseFloat(document.querySelector("[data-page-stars]").style.getPropertyValue("--starfield-rotation")) - window.starAngleStart) < 0.001', true)
-        ->assertNoJavaScriptErrors()
-        ->assertNoConsoleLogs();
+    $page->assertScript('() => {
+        for (const top of [400, 1600, document.documentElement.scrollHeight, 400, 0]) {
+            scrollTo({top, behavior:"instant"});
+            const plane = document.querySelector("[data-page-stars] .orbit-starfield__stars");
+            const bounds = plane.getBoundingClientRect();
+            if (bounds.top > 0 || bounds.bottom < innerHeight || bounds.height > innerHeight + 1025) return false;
+        }
+        return true;
+    }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['motion' => false, 'reduced motion' => true]);
 
-it('uses one continuous star background from the intro through the footer', function (bool $reduced) {
+it('keeps one non-fading star texture from the intro through the footer at every viewport', function (bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize(1560, 1000);
-    $page->assertScript('() => {
-        const field = document.querySelector("[data-page-stars]");
-        window.sharedStarfield = field;
-        return parseFloat(field.style.getPropertyValue("--starfield-rotation")) === 0
-            && document.querySelectorAll("[data-scroll-stars]").length === 1
-            && field.parentElement.id === "top"
-            && field.getBoundingClientRect().bottom >= document.querySelector("footer").getBoundingClientRect().bottom;
-    }', true);
-    $page->script('window.scrollTo({ top: 400, behavior: "instant" })');
-    $page->assertScript('() => {
-        const field = document.querySelector("[data-page-stars]");
-        const stars = field.querySelector(".orbit-starfield__stars");
-        const angle = parseFloat(field.style.getPropertyValue("--starfield-rotation"));
-        const matrix = new DOMMatrix(getComputedStyle(stars).transform);
-        const bounds = field.getBoundingClientRect();
-        const plane = stars.getBoundingClientRect();
-        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-        return (reduced ? angle === 0 && matrix.isIdentity : angle > 0.1 && angle < 1 && matrix.b > 0.001)
-            && plane.left <= bounds.left && plane.right >= bounds.right
-            && plane.top <= 0 && plane.bottom >= bounds.bottom;
-    }', true);
-    $page->script('window.scrollTo({ top: 0, behavior: "instant" })');
-    $page->assertScript('async () => {
-        const boundary = document.querySelector("#story").getBoundingClientRect().top + scrollY;
-        const angles = [];
-        for (const offset of [-100, 0, 100]) {
-            window.scrollTo({ top: boundary + offset, behavior: "instant" });
-            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    $page->assertScript('document.querySelector("[data-hero-content]").hasAttribute("data-exit-start")', true);
+    foreach ([1560, 934, 390, 1560] as $width) {
+        $page->resize($width, 1000);
+        $page->script('document.querySelector("#install").scrollIntoView({behavior:"instant"})');
+        $page->assertScript('() => {
             const field = document.querySelector("[data-page-stars]");
-            if (field !== window.sharedStarfield) return false;
-            angles.push(parseFloat(field.style.getPropertyValue("--starfield-rotation")));
-        }
-        const firstStep = angles[1] - angles[0];
-        const secondStep = angles[2] - angles[1];
-        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-        return Math.abs(firstStep - secondStep) < 0.001
-            && (reduced ? angles.every(angle => angle === 0) : firstStep > 0);
-    }', true);
-    $page->script('window.scrollTo({ top: 0, behavior: "instant" })');
-    $page->assertScript('() => parseFloat(document.querySelector("[data-page-stars]").style.getPropertyValue("--starfield-rotation")) === 0', true)
-        ->assertNoJavaScriptErrors()
-        ->assertNoConsoleLogs();
+            return field !== null && field.children.length === 1
+                && field.getAnimations({subtree:true}).length === 0
+                && getComputedStyle(field.firstElementChild).backgroundImage !== "none";
+        }', true);
+    }
+    $page->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['motion' => false, 'reduced motion' => true]);
 
 it('follows three calm chapters with six responsive capability panels', function (int $width) {
@@ -649,30 +627,23 @@ it('bounds intro animation work while retaining moving clusters at every viewpor
             observer.observe(svg, {subtree: true, attributes: true});
             await new Promise(resolve => setTimeout(resolve, 1100));
             observer.disconnect();
-            return positions > 5 && positions <= (innerWidth <= 1023 ? 35 : 69)
+            return positions > 5 && positions <= 69
                 && globes > 1 && globes <= (innerWidth <= 1023 ? 12 : 18)
                 && svg.querySelectorAll("[data-hero-body]").length === 15
                 && svg.querySelectorAll("[data-hero-signal] path").length === 14;
         }', true)
         ->assertScript('() => {
             const field = document.querySelector("[data-page-stars]");
-            const stars = [...field.querySelectorAll(".orbit-star")];
-            const animations = field.getAnimations({subtree: true});
-            const stride = innerWidth <= 639 ? 3 : innerWidth <= 1023 ? 2 : 1;
-            return animations.length > 0 && animations.length < stars.length / 4
-                && animations.every(animation => {
-                    const target = animation.effect.target;
-                    const rect = target.getBoundingClientRect();
-                    return animation.playState === "running" && stars.indexOf(target) % stride === 0
-                        && rect.bottom >= -40 && rect.top <= innerHeight + 40;
-                });
+            return field !== null && field.children.length === 1
+                && field.getAnimations({subtree:true}).length === 0
+                && getComputedStyle(field.firstElementChild).backgroundImage !== "none";
         }', true)
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 1440, 'tablet' => 768, 'mobile' => 390]);
 
 it('allocates no star animations for reduced motion', function () {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize(390, 844);
-    $page->assertScript('document.querySelector("[data-page-stars]").getAnimations({subtree: true}).length', 0)
+    $page->assertScript('document.querySelector("[data-page-stars]").getAnimations({subtree:true}).length', 0)
         ->assertNoJavaScriptErrors();
 });
 
@@ -1095,18 +1066,16 @@ it('uses rounded hardware depth and the same projection for the server devices a
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 1440, 'mobile' => 390]);
 
-it('finishes the server corner and sends its bottom connection downward clear of the devices', function (int $width) {
+it('omits the server corner seam and sends its bottom connection downward clear of the devices', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
     $page->script('document.querySelector("[data-server-scene]").scrollIntoView({block:"center",behavior:"instant"})');
     $page->assertAttribute('[data-server-scene]', 'data-control-phase', 'open')
         ->assertScript('() => {
             const svg=document.querySelector("[data-server-scene]");
-            const seam=svg.querySelector("[data-server-corner]");
-            const first=seam.getPointAtLength(0), last=seam.getPointAtLength(seam.getTotalLength());
-            if(Math.abs(first.x-last.x)>.01||Math.abs(last.y-first.y-150*Math.cos(Math.PI/6))>.01) return false;
+            if(svg.querySelector("[data-server-corner]")) return false;
             const laptop=svg.querySelector("[data-control-laptop]").getBoundingClientRect();
             const top=svg.querySelector("[data-server-top]").getBoundingClientRect();
-            if(laptop.right>=top.left||laptop.top>=top.top) return false;
+            if(laptop.right>=top.left) return false;
             const path=document.querySelector("[data-growth-route] [data-route-path]");
             const start=path.getPointAtLength(0).matrixTransform(path.getScreenCTM());
             const below=path.getPointAtLength(30).matrixTransform(path.getScreenCTM());
@@ -1138,9 +1107,7 @@ it('shows a cube Gateway with CPU telemetry vertical drives and a perforated sid
     $page->assertScript('() => {
         const scene=document.querySelector("[data-server-scene]");
         const top=scene.querySelector("[data-server-top]");
-        const corner=scene.querySelector("[data-server-corner]");
-        const height=corner.getTotalLength()/Math.cos(Math.PI/6);
-        if(top.width.baseVal.value!==top.height.baseVal.value||Math.abs(height-top.width.baseVal.value)>.01) return false;
+        if(top.width.baseVal.value!==top.height.baseVal.value) return false;
         if(top.parentElement.querySelectorAll("rect").length!==1||top.parentElement.querySelector("text").textContent!=="Gateway") return false;
         const drives=[...scene.querySelectorAll("[data-drive-slot] > rect:first-child")];
         const pattern=scene.querySelector("[data-server-perforations]");
@@ -1168,6 +1135,8 @@ it('shrinks the control laptop and keeps the early opening and device ports alig
         if(Math.abs(Number(d.scrollStart)-start)>1||Math.abs(Number(d.scrollEnd)-start-distance)>1) return false;
         const scale=scene.querySelector("[data-remote-device=laptop]").transform.baseVal.consolidate().matrix;
         if(Math.abs(scale.a-1.12*.75)>.001||Math.abs(scale.d-1.12*.75)>.001) return false;
+        if(getComputedStyle(scene.querySelector("[data-control-laptop] .orbit-laptop__wall")).fill
+            !==getComputedStyle(scene.querySelector("[data-remote-wall]")).fill) return false;
         const point=el=>new DOMPoint(el.cx.baseVal.value,el.cy.baseVal.value).matrixTransform(el.getScreenCTM());
         for(const kind of ["phone","tablet"]){
             const device=scene.querySelector(`[data-remote-device=${kind}]`);
@@ -1180,7 +1149,13 @@ it('shrinks the control laptop and keeps the early opening and device ports alig
         const phone=scene.querySelector("[data-remote-device=phone]").transform.baseVal.consolidate().matrix;
         const tablet=scene.querySelector("[data-remote-device=tablet]").transform.baseVal.consolidate().matrix;
         const coords=scene.querySelector("[data-device-link=phone]").getAttribute("d").match(/-?[\d.]+/g).map(Number);
-        return phone.e>575&&phone.f<240&&tablet.e>525&&tablet.f>390
+        const frontCorner=new DOMPoint(0,150).matrixTransform(scene.querySelector("[data-server-front]").getScreenCTM());
+        const sideCorner=new DOMPoint(0,150).matrixTransform(scene.querySelector("[data-server-side]").getScreenCTM());
+        const laptopPort=point(scene.querySelector("[data-server-port=laptop]"));
+        const phonePort=point(scene.querySelector("[data-server-port=phone]"));
+        return Math.hypot(laptopPort.x-frontCorner.x,laptopPort.y-frontCorner.y)<.1
+            && Math.hypot(phonePort.x-sideCorner.x,phonePort.y-sideCorner.y)<.1
+            && phone.e>575&&phone.f<240&&tablet.e>525&&tablet.f>390
             && coords[2]>coords[0]&&coords[5]<coords[3];
     }', true)->assertScript('async () => {
         const trace=document.querySelector("[data-cpu-trace]");
@@ -1205,8 +1180,8 @@ it('insets the smaller premise laptop and gives the tablet a direct uncluttered 
         const coords=path.getAttribute("d").match(/-?[\\d.]+/g).map(Number);
         if(coords.length!==8) return false;
         const [x0,y0,x1,y1,x2,y2,x3,y3]=coords;
-        const corner=scene.querySelector("[data-server-corner]");
-        const edge=corner.getPointAtLength(corner.getTotalLength()).matrixTransform(corner.getScreenCTM());
+        const port=scene.querySelector("[data-server-port=tablet]");
+        const edge=new DOMPoint(port.cx.baseVal.value,port.cy.baseVal.value).matrixTransform(port.getScreenCTM());
         const cableStart=path.getPointAtLength(0).matrixTransform(path.getScreenCTM());
         if(Math.hypot(edge.x-cableStart.x,edge.y-cableStart.y)>.5) return false;
         if(!(x1>x0&&y1>y0&&x2<x1&&y2>y1&&x3>x2&&y3>y2)) return false;
@@ -1355,7 +1330,7 @@ it('illustrates custom namespaces and the shared inventory beneath a centered he
         if(!planet?.querySelector("circle") || !planet.querySelector("path")?.getAttribute("d").includes("a")) return false;
         const bounds=planet.getBoundingClientRect();
         if(Math.abs(bounds.width-bounds.height)>1 || cards[2].querySelector("ellipse")) return false;
-        return inventory.join(",") === "nodes,apps,routes,tools,processes"
+        return inventory.join(",") === "nodes,apps,databases,routes,tools"
             && document.documentElement.scrollWidth <= innerWidth;
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 1669, 'tablet' => 768, 'mobile' => 390]);
@@ -1409,17 +1384,19 @@ it('lets the intro constellation flow into the story without a divider or clippe
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 2083, 'mobile' => 390]);
 
-it('keeps the overflowing intro constellation moving after the intro has left the viewport', function () {
+it('pauses the overflowing intro constellation once its scroll fade is fully transparent', function () {
     $page = visit('/')->resize(2083, 900);
     $page->script('window.scrollTo({top: document.querySelector(".orbit-story-hero-shell").getBoundingClientRect().bottom+scrollY+20, behavior:"instant"})');
-    $page->assertAttribute('[data-hero-constellation]', 'data-animating', 'true')
+    $page->assertAttribute('[data-hero-constellation]', 'data-animating', 'false')
         ->assertScript('async () => {
             const shell=document.querySelector(".orbit-story-hero-shell").getBoundingClientRect();
-            const network=document.querySelector("[data-hero-network]").getBoundingClientRect();
+            const scene=document.querySelector("[data-hero-network]");
+            const network=scene.getBoundingClientRect();
             const body=document.querySelector("[data-hero-body=h4]");
             const before=body.getAttribute("transform");
             await new Promise(resolve=>setTimeout(resolve,200));
-            return shell.bottom<0 && network.bottom>0 && body.getAttribute("transform")!==before;
+            return shell.bottom<0 && network.bottom>0 && getComputedStyle(scene).opacity==="0"
+                && body.getAttribute("transform")===before;
         }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
 

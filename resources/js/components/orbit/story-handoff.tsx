@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import { useEffect, useId, useRef } from "react";
 import {
     laptopCloseStart,
@@ -214,6 +215,9 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
         if (!svg || !root || !source || !target || !scene || !path || !track || !pulse || !trail)
             return;
         const trailPath = trail.querySelector<SVGPathElement>("path")!;
+        // Geometry queries on a rendered path flush pending SVG styles/layout.
+        // Sample an unattached path with the same geometry instead.
+        const geometry = document.createElementNS("http://www.w3.org/2000/svg", "path");
         const gradient = svg.querySelector<SVGLinearGradientElement>("[data-route-gradient]")!;
         const trailLength = parseFloat(
             getComputedStyle(svg).getPropertyValue("--handoff-trail-length"),
@@ -324,7 +328,8 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
                 track.setAttribute("d", d);
                 path.setAttribute("d", d);
                 trailPath.setAttribute("d", d);
-                length = path.getTotalLength();
+                geometry.setAttribute("d", d);
+                length = geometry.getTotalLength();
             };
             previousTargetOffset = NaN;
             const top = bounds.top + window.scrollY;
@@ -349,7 +354,7 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
             svg.dataset.scrollEnd = String(end);
             lastProgress = -1;
         };
-        const update = () => {
+        const update = (_time: number, scrollTop: number) => {
             frame = 0;
             if (disposed) return;
             if (dirty) {
@@ -358,10 +363,10 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
             }
             const progress = motion.matches
                 ? 1
-                : clamp((window.scrollY - start) / Math.max(1, end - start));
+                : clamp((scrollTop - start) / Math.max(1, end - start));
             const range = destinationGrid?.dataset;
             const entrance = clamp(
-                (window.scrollY - Number(range?.parallaxStart ?? 0)) /
+                (scrollTop - Number(range?.parallaxStart ?? 0)) /
                     Math.max(
                         1,
                         Number(range?.parallaxEnd ?? 1) - Number(range?.parallaxStart ?? 0),
@@ -392,8 +397,8 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
                 const to = Math.max(progress, tailProgress);
                 trailPath.style.strokeDasharray = `${to - from} 2`;
                 trailPath.style.strokeDashoffset = String(-from);
-                const tail = path.getPointAtLength(length * tailProgress);
-                const p = path.getPointAtLength(length * progress);
+                const tail = geometry.getPointAtLength(length * tailProgress);
+                const p = geometry.getPointAtLength(length * progress);
                 gradient.setAttribute("x1", String(tail.x));
                 gradient.setAttribute("y1", String(tail.y));
                 gradient.setAttribute("x2", String(p.x));
@@ -406,7 +411,7 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
             }
         };
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(update);
+            if (!frame) frame = requestScrollFrame(update);
         };
         const resize = () => {
             dirty = true;
@@ -415,7 +420,7 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
         const observer = new ResizeObserver(resize);
         observer.observe(root);
         observer.observe(scene);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", resize);
         motion.addEventListener("change", schedule);
         void document.fonts.ready.then(() => {
@@ -424,9 +429,9 @@ export function StoryHandoff({ stage = "premise" }: { stage?: "premise" | "topol
         schedule();
         return () => {
             disposed = true;
-            cancelAnimationFrame(frame);
+            cancelScrollFrame(frame);
             observer.disconnect();
-            window.removeEventListener("scroll", schedule);
+            stopScroll();
             window.removeEventListener("resize", resize);
             motion.removeEventListener("change", schedule);
         };

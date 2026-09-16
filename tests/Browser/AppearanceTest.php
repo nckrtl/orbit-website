@@ -12,7 +12,8 @@ it('shows the default story network without topology controls', function () {
 it('supports keyboard setup prompt copying', function () {
     $page = visit('/');
 
-    $page->keys('[aria-label="Copy Orbit getting-started prompt"]', 'Enter')
+    $page->assertScript('document.querySelector("[data-hero-content]").hasAttribute("data-exit-start")', true)
+        ->keys('[aria-label="Copy Orbit getting-started prompt"]', 'Enter')
         ->assertSee('Copied')
         ->assertNoJavaScriptErrors();
 });
@@ -20,7 +21,7 @@ it('supports keyboard setup prompt copying', function () {
 it('renders the story mobile layout without overflow or javascript errors', function () {
     $page = visit('/')->on()->mobile();
 
-    $page->assertSee('Build your ideas on machines you own, run by your agent.')
+    $page->assertSee('Build ideas faster on machines you own, run by your agent.')
         ->assertScript('document.documentElement.scrollWidth <= document.documentElement.clientWidth', true)
         ->assertScript('getComputedStyle(document.querySelector("nav[aria-label=\"Primary navigation\"]")).display', 'none')
         ->assertNoJavaScriptErrors()

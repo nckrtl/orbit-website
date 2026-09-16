@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import { useEffect, useRef } from "react";
 
 export function useHeaderScroll() {
@@ -13,15 +14,15 @@ export function useHeaderScroll() {
         let previousY = 0;
         let direction = 0;
         let travel = 0;
-        const position = () => Math.max(0, Math.min(scrollY, maxScroll));
-        const show = () => {
+        const position = (scrollTop: number) => Math.max(0, Math.min(scrollTop, maxScroll));
+        const show = (y: number) => {
             header.removeAttribute("data-header-hidden");
-            previousY = position();
+            previousY = y;
             travel = 0;
         };
-        const paint = () => {
+        const paint = (_time: number, scrollTop: number) => {
             frame = 0;
-            const y = position();
+            const y = position(scrollTop);
             const delta = y - previousY;
             previousY = y;
             if (
@@ -29,7 +30,7 @@ export function useHeaderScroll() {
                 y <= headerHeight ||
                 header.querySelector('[aria-expanded="true"], :focus-visible')
             ) {
-                show();
+                show(y);
                 return;
             }
             if (!delta) return;
@@ -39,8 +40,9 @@ export function useHeaderScroll() {
             // Ignore finger jitter, and clamp overscroll at both ends of the page.
             if (travel >= 12) header.toggleAttribute("data-header-hidden", direction > 0);
         };
+        const focus = () => show(position(window.scrollY));
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(paint);
+            if (!frame) frame = requestScrollFrame(paint);
         };
         const measure = () => {
             maxScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
@@ -49,20 +51,20 @@ export function useHeaderScroll() {
         };
         const resize = new ResizeObserver(measure);
         resize.observe(document.documentElement);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", measure);
         compact.addEventListener("change", measure);
-        header.addEventListener("focusin", show);
+        header.addEventListener("focusin", focus);
         // Preserve the scroll delta if the reader moved before hydration.
         // Resetting it here would leave the header visible until another scroll.
         measure();
         return () => {
-            cancelAnimationFrame(frame);
+            cancelScrollFrame(frame);
             resize.disconnect();
-            window.removeEventListener("scroll", schedule);
+            stopScroll();
             window.removeEventListener("resize", measure);
             compact.removeEventListener("change", measure);
-            header.removeEventListener("focusin", show);
+            header.removeEventListener("focusin", focus);
             header.removeAttribute("data-header-hidden");
         };
     }, []);

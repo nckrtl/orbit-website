@@ -1,13 +1,25 @@
 type Activity = { active: boolean; visible: boolean; reducedMotion: boolean };
 type ActivityListener = (activity: Activity) => void;
-type Scene = { visible: boolean; listeners: Set<ActivityListener> };
+type Scene = { element: Element; visible: boolean; listeners: Set<ActivityListener> };
+const hiddenScenes = new WeakMap<Element, Set<string>>();
+
+// IntersectionObserver only checks bounds. A faded-out scene can still overlap
+// the viewport, so its scroll controllers also report their visibility gates.
+export function setSceneHidden(element: Element, source: string, hidden: boolean) {
+    const sources = hiddenScenes.get(element) ?? new Set<string>();
+    if (sources.has(source) === hidden) return;
+    if (hidden) sources.add(source);
+    else sources.delete(source);
+    hiddenScenes.set(element, sources);
+    activityObserver?.refresh(element);
+}
 
 // Lazily created in effects: SSR never touches browser globals or retains scenes.
 function createActivityObserver() {
     const motion = matchMedia("(prefers-reduced-motion: reduce)");
     const scenes = new Map<Element, Scene>();
     const notify = (scene: Scene) => {
-        const visible = scene.visible && !document.hidden;
+        const visible = scene.visible && !document.hidden && !hiddenScenes.get(scene.element)?.size;
         scene.listeners.forEach((listener) =>
             listener({
                 visible,
@@ -28,15 +40,19 @@ function createActivityObserver() {
     document.addEventListener("visibilitychange", sync);
     motion.addEventListener("change", sync);
     return {
+        refresh(element: Element) {
+            const scene = scenes.get(element);
+            if (scene) notify(scene);
+        },
         observe(element: Element, listener: ActivityListener) {
             let scene = scenes.get(element);
             if (!scene) {
-                scene = { visible: false, listeners: new Set() };
+                scene = { element, visible: false, listeners: new Set() };
                 scenes.set(element, scene);
                 observer.observe(element);
             }
             scene.listeners.add(listener);
-            const visible = scene.visible && !document.hidden;
+            const visible = scene.visible && !document.hidden && !hiddenScenes.get(element)?.size;
             listener({
                 visible,
                 active: visible && !motion.matches,
@@ -66,36 +82,124 @@ export function observeSceneActivity(element: Element, listener: ActivityListene
 
 // All procedural scenes share one frame callback. Slow details have their own
 // cadence; 120/144Hz displays don't multiply SVG path work. No React frame state.
-const frames = new Set<(now: number) => void>();
+type FramePaint = (now: number, scrollTop: number) => void;
+const frames = new Set<FramePaint>();
+const scrollFrames = new Map<number, FramePaint>();
+const scrollListeners = new Set<() => void>();
+let scrollFrameId = 0;
 let frame = 0;
+let painting = false;
+let scrollPosition = 0;
+let scrollingUntil = 0;
+let previousFrame = 0;
+let slowScrollFrames = 0;
+let deferAmbientMotion = false;
+
+function onScroll() {
+    // Capture once in the passive event, before CSS animations advance for
+    // the next frame. Reading scrollY in rAF can flush their pending styles.
+    scrollPosition = window.scrollY;
+    const now = performance.now();
+    if (now >= scrollingUntil) {
+        slowScrollFrames = 0;
+        deferAmbientMotion = false;
+        previousFrame = 0;
+    }
+    scrollingUntil = now + 180;
+    scrollListeners.forEach((schedule) => schedule());
+}
+
+export function observeScroll(schedule: () => void) {
+    if (!scrollListeners.size) {
+        scrollPosition = window.scrollY;
+        scrollingUntil = 0;
+        previousFrame = 0;
+        slowScrollFrames = 0;
+        deferAmbientMotion = false;
+        window.addEventListener("scroll", onScroll, { passive: true });
+    }
+    scrollListeners.add(schedule);
+    return () => {
+        scrollListeners.delete(schedule);
+        if (!scrollListeners.size) window.removeEventListener("scroll", onScroll);
+    };
+}
+
 function tick(now: number) {
+    // Read before any scene writes. Separate rAF callbacks reading scrollY
+    // after another callback mutates SVG/styles force repeated layout flushes.
+    const scrollTop = scrollListeners.size ? scrollPosition : window.scrollY;
+    if (now >= scrollingUntil) {
+        deferAmbientMotion = false;
+        slowScrollFrames = 0;
+    } else if (previousFrame) {
+        const interval = now - previousFrame;
+        slowScrollFrames = interval > 24 && interval < 250 ? slowScrollFrames + 1 : 0;
+        // Under sustained frame pressure, give scroll-linked effects priority.
+        // Freeze optional procedural motion until scrolling settles, preserving
+        // its clock/pose. No battery API, device guess, or permanent FPS cap.
+        if (slowScrollFrames >= 3) deferAmbientMotion = true;
+    }
+    previousFrame = now;
+    painting = true;
+    const pending = [...scrollFrames.keys()];
+    for (const id of pending) {
+        const paint = scrollFrames.get(id);
+        scrollFrames.delete(id);
+        paint?.(now, scrollTop);
+    }
+    frames.forEach((paint) => paint(now, scrollTop));
+    painting = false;
     frame = 0;
-    frames.forEach((paint) => paint(now));
-    if (frames.size) frame = requestAnimationFrame(tick);
+    if (frames.size || scrollFrames.size) frame = requestAnimationFrame(tick);
+}
+
+export function requestScrollFrame(paint: FramePaint) {
+    const id = ++scrollFrameId;
+    scrollFrames.set(id, paint);
+    if (!frame && !painting) frame = requestAnimationFrame(tick);
+    return id;
+}
+
+export function cancelScrollFrame(id: number) {
+    scrollFrames.delete(id);
+    if (!frames.size && !scrollFrames.size) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+    }
 }
 
 export function animateScene(
     element: Element,
-    paint: (elapsed: number, delta: number) => void,
+    paint: (elapsed: number, delta: number, scrollTop: number) => void,
     { fps = () => 60, onActivity }: { fps?: () => number; onActivity?: ActivityListener } = {},
 ) {
     let elapsed = 0;
     let previous: number | null = null;
-    let lastPaint = -Infinity;
+    let nextPaint: number | null = null;
     let active = false;
-    const draw = (now: number) => {
-        if (now - lastPaint < 1000 / fps() - 0.5) return;
+    const draw = (now: number, scrollTop: number) => {
+        if (deferAmbientMotion) {
+            previous = null;
+            nextPaint = null;
+            return;
+        }
+        if (nextPaint !== null && now + 0.5 < nextPaint) return;
+        const interval = 1000 / fps();
+        // Carry the remainder forward: resetting the interval to `now` turns
+        // a 60fps scene into 48fps on a 144Hz display. Drop missed frames after
+        // a stall instead of trying to catch up with a burst of work.
+        nextPaint = Math.max(nextPaint ?? now, now - interval) + interval;
         const delta = previous === null ? 0 : Math.min(now - previous, 100) / 1000;
         elapsed += delta;
         previous = now;
-        lastPaint = now;
-        paint(elapsed, delta);
+        paint(elapsed, delta, scrollTop);
     };
     const stop = () => {
         frames.delete(draw);
         previous = null;
-        lastPaint = -Infinity;
-        if (!frames.size) {
+        nextPaint = null;
+        if (!frames.size && !scrollFrames.size) {
             cancelAnimationFrame(frame);
             frame = 0;
         }
@@ -106,7 +210,7 @@ export function animateScene(
         active = activity.active;
         if (active) {
             frames.add(draw);
-            if (!frame) frame = requestAnimationFrame(tick);
+            if (!frame && !painting) frame = requestAnimationFrame(tick);
         } else stop();
     });
     return () => {

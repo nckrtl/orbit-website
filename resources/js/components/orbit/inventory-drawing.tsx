@@ -7,7 +7,7 @@ import { TabBacking } from "./tab-backing";
 const planet = { x: 68, y: 96, radius: 28 };
 const axis = hardwarePoint(1, 0);
 const verticalAxis = Math.cos(Math.PI / 6);
-const labels = ["nodes", "apps", "routes", "tools", "processes"];
+const labels = ["nodes", "apps", "databases", "routes", "tools"];
 
 function point(x: number, y: number) {
     const projected = hardwarePoint(x, y);

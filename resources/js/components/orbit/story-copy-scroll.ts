@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame, setSceneHidden } from "./animation";
 import { useEffect, useRef } from "react";
 import {
     storyCopyBounds,
@@ -52,7 +53,7 @@ export function useStoryCopyScroll() {
         let parallaxTravel = 0;
         const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
-        const paint = () => {
+        const paint = (_time: number, scrollTop: number) => {
             frame = 0;
             for (const chapter of chapters) {
                 const {
@@ -73,14 +74,14 @@ export function useStoryCopyScroll() {
                     exitAt,
                     exitDistance,
                 } = chapter;
-                const entering = clamp((scrollY - enterAt) / enterDistance);
-                const exiting = clamp((scrollY - exitAt) / exitDistance);
+                const entering = clamp((scrollTop - enterAt) / enterDistance);
+                const exiting = clamp((scrollTop - exitAt) / exitDistance);
                 const signature = [
                     entering,
                     exiting,
-                    clamp((scrollY - parallaxAt) / parallaxDistance),
-                    clamp((scrollY - artAt) / artDistance),
-                    clamp((scrollY - artExitAt) / artExitDistance),
+                    clamp((scrollTop - parallaxAt) / parallaxDistance),
+                    clamp((scrollTop - artAt) / artDistance),
+                    clamp((scrollTop - artExitAt) / artExitDistance),
                     motion.matches,
                 ].join(",");
                 // Settled/offscreen chapters don't invalidate styles during every scroll.
@@ -89,7 +90,7 @@ export function useStoryCopyScroll() {
                 if (grid) {
                     const progress = motion.matches
                         ? 1
-                        : clamp((scrollY - parallaxAt) / parallaxDistance);
+                        : clamp((scrollTop - parallaxAt) / parallaxDistance);
                     grid.style.setProperty(
                         "--story-entry-offset",
                         `${-parallaxTravel * (1 - progress)}px`,
@@ -121,15 +122,21 @@ export function useStoryCopyScroll() {
                         "--hero-network-visibility",
                         String(motion.matches ? Number(entering === 0) : 1 - entering),
                     );
+                    if (network)
+                        setSceneHidden(
+                            network,
+                            "story-entry",
+                            motion.matches ? entering > 0 : entering === 1,
+                        );
                 }
                 copy.toggleAttribute("data-copy-hidden", hidden);
                 copy.inert = hidden;
                 if (visual && section.dataset.chapter !== "problem") {
-                    const progress = motion.matches ? 1 : clamp((scrollY - artAt) / artDistance);
+                    const progress = motion.matches ? 1 : clamp((scrollTop - artAt) / artDistance);
                     const artOpacity = motion.matches
                         ? 1
                         : clamp(progress * artRate) *
-                          (1 - clamp((scrollY - artExitAt) / artExitDistance));
+                          (1 - clamp((scrollTop - artExitAt) / artExitDistance));
                     visual.style.setProperty("--story-art-opacity", String(artOpacity));
                     visual.inert = artOpacity === 0;
                     visual.style.setProperty(
@@ -143,7 +150,7 @@ export function useStoryCopyScroll() {
             }
         };
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(paint);
+            if (!frame) frame = requestScrollFrame(paint);
         };
         const measure = () => {
             const height = innerHeight;
@@ -206,7 +213,7 @@ export function useStoryCopyScroll() {
             resize.observe(section);
         }
         if (ref.current) resize.observe(ref.current);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", measure);
         window.addEventListener("pageshow", measure);
         desktop.addEventListener("change", measure);
@@ -214,9 +221,10 @@ export function useStoryCopyScroll() {
         measure();
 
         return () => {
+            if (network) setSceneHidden(network, "story-entry", false);
             resize.disconnect();
-            cancelAnimationFrame(frame);
-            window.removeEventListener("scroll", schedule);
+            cancelScrollFrame(frame);
+            stopScroll();
             window.removeEventListener("resize", measure);
             window.removeEventListener("pageshow", measure);
             desktop.removeEventListener("change", measure);

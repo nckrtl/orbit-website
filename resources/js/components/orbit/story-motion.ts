@@ -1,4 +1,4 @@
-import { animateScene } from "./animation";
+import { animateScene, cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import { useEffect, useRef } from "react";
 import { globe, constellationSignal, constellationReadoutTransform } from "./hero-constellation";
 import { objectScale } from "./object-scale";
@@ -137,10 +137,10 @@ export function useStoryMotion(revision: string) {
             scale = 1,
             lastGlobe = -Infinity,
             lastProgress = -1;
-        const paint = (time: number) => {
+        const paintReveal = (scrollTop: number) => {
             const progress = motion.matches
                 ? 1
-                : clamp((scrollY - top + innerHeight * 0.85) / Math.max(160, height * 0.8));
+                : clamp((scrollTop - top + innerHeight * 0.85) / Math.max(160, height * 0.8));
             if (progress !== lastProgress) {
                 svg.dataset.networkProgress = progress.toFixed(3);
                 reveal.forEach((el) => {
@@ -153,6 +153,10 @@ export function useStoryMotion(revision: string) {
                 });
                 lastProgress = progress;
             }
+            return progress;
+        };
+        const paint = (time: number, scrollTop: number) => {
+            const progress = paintReveal(scrollTop);
             const positions = topologyAt(time, hosts);
             const updateGlobe = time - lastGlobe >= 1 / 15;
             if (updateGlobe) lastGlobe = time;
@@ -226,21 +230,29 @@ export function useStoryMotion(revision: string) {
                 signal.style.opacity = motion.matches ? "0" : String(pose.opacity * progress);
             });
         };
-        const compact = matchMedia("(max-width: 1100px)");
+        // The entrance follows scrolling even when optional orbit motion yields
+        // its frame budget on a slower device.
+        let revealFrame = 0;
+        const stopScroll = observeScroll(() => {
+            if (!revealFrame)
+                revealFrame = requestScrollFrame((_time, scrollTop) => {
+                    revealFrame = 0;
+                    paintReveal(scrollTop);
+                });
+        });
         const stop = animateScene(
             svg,
-            (_elapsed, delta) => {
+            (_elapsed, delta, scrollTop) => {
                 clock.current += delta;
-                paint(clock.current);
+                paint(clock.current, scrollTop);
             },
             {
-                fps: () => (compact.matches ? 30 : 60),
                 onActivity: ({ active, reducedMotion }) => {
                     svg.dataset.animating = String(active);
                     if (reducedMotion) {
                         clock.current = 0;
                         lastGlobe = -Infinity;
-                        paint(0);
+                        paint(0, window.scrollY);
                     }
                 },
             },
@@ -265,7 +277,7 @@ export function useStoryMotion(revision: string) {
                     );
                 });
             }
-            paint(clock.current);
+            paint(clock.current, window.scrollY);
         };
         const resize = new ResizeObserver(measure);
         resize.observe(svg);
@@ -277,6 +289,8 @@ export function useStoryMotion(revision: string) {
         return () => {
             disposed = true;
             stop();
+            stopScroll();
+            cancelScrollFrame(revealFrame);
             resize.disconnect();
             window.removeEventListener("resize", measure);
         };

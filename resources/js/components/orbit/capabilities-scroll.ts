@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import { useEffect, useRef } from "react";
 
 export function useCapabilitiesScroll() {
@@ -18,25 +19,21 @@ export function useCapabilitiesScroll() {
             exitStart = 0,
             exitDistance = 1;
         const clamp = (value: number) => Math.max(0, Math.min(1, value));
-        const paint = () => {
+        const paint = (_time: number, scrollTop: number) => {
             frame = 0;
-            const entering = motion.matches ? 1 : clamp((scrollY - enterStart) / enterDistance);
-            const exiting = motion.matches ? 0 : clamp((scrollY - exitStart) / exitDistance);
+            const entering = motion.matches ? 1 : clamp((scrollTop - enterStart) / enterDistance);
+            const exiting = motion.matches ? 0 : clamp((scrollTop - exitStart) / exitDistance);
             if (entering === lastEntering && exiting === lastExiting) return;
             lastEntering = entering;
             lastExiting = exiting;
             const opacity = entering * (1 - exiting);
             element.style.setProperty("--capabilities-opacity", String(opacity));
-            element.style.setProperty(
-                "--capabilities-filter",
-                opacity === 1 ? "none" : `blur(calc(var(--blur-story-layer) * ${1 - opacity}))`,
-            );
             element.style.setProperty("--capabilities-enter", String(1 - entering));
             element.style.setProperty("--capabilities-exit", String(exiting));
             element.inert = opacity === 0;
         };
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(paint);
+            if (!frame) frame = requestScrollFrame(paint);
         };
         const measure = () => {
             if (disposed) return;
@@ -53,7 +50,7 @@ export function useCapabilitiesScroll() {
         resize.observe(element);
         const main = element.closest("main");
         if (main) resize.observe(main);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", measure);
         window.addEventListener("pageshow", measure);
         motion.addEventListener("change", schedule);
@@ -62,13 +59,13 @@ export function useCapabilitiesScroll() {
         return () => {
             disposed = true;
             resize.disconnect();
-            cancelAnimationFrame(frame);
-            window.removeEventListener("scroll", schedule);
+            cancelScrollFrame(frame);
+            stopScroll();
             window.removeEventListener("resize", measure);
             window.removeEventListener("pageshow", measure);
             motion.removeEventListener("change", schedule);
             element.removeAttribute("data-capabilities-scroll");
-            for (const name of ["opacity", "filter", "enter", "exit"])
+            for (const name of ["opacity", "enter", "exit"])
                 element.style.removeProperty(`--capabilities-${name}`);
             element.inert = false;
         };

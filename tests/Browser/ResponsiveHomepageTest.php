@@ -78,7 +78,7 @@ it('reframes the scenes and releases the menu when changing to desktop', functio
     $page->script('scrollTo({top:900,behavior:"instant"})');
     $page->assertScript('scrollY>800', true)
         ->resize(820, 1180)
-        ->assertAttribute('.orbit-stack', 'viewBox', '85 0 930 640')
+        ->assertAttribute('.orbit-stack', 'viewBox', '0 0 1100 640')
         ->assertScript('() => [...document.querySelectorAll("[data-funnel-lane]")].every(path=>!/[a-z]*Infinity|NaN/.test(path.getAttribute("d"))) && document.documentElement.scrollWidth<=innerWidth', true)
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
@@ -93,9 +93,7 @@ it('keeps compact background motion light and supports keyboard dismissal', func
         ->assertScript('document.activeElement.getAttribute("aria-label")', 'Open navigation menu');
     $page->script('document.querySelector("#build").scrollIntoView({behavior:"instant"})');
     $page->assertScript('() => {
-        const field=document.querySelector("[data-page-stars]");
-        return field.style.getPropertyValue("--starfield-rotation")==="0deg"
-            && getComputedStyle(field.querySelector(".orbit-starfield__stars")).transform==="none"
+        return document.querySelector("[data-page-stars]").getAnimations({subtree:true}).length === 0
             && document.documentElement.scrollWidth<=innerWidth;
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
@@ -134,6 +132,8 @@ it('reveals the hidden header for keyboard focus and restores desktop navigation
         return before > 500 && scrollY === before;
     }', true)->assertScript('document.querySelector(".orbit-story-header").getBoundingClientRect().top', 0)
         ->keys('[aria-label="Orbit home"]', 'Tab')
+        ->assertScript('document.activeElement.getAttribute("aria-label")', 'Choose color theme')
+        ->keys('[aria-label="Choose color theme"]', 'Tab')
         ->assertScript('document.activeElement.getAttribute("aria-label")', 'Open navigation menu');
     $page->script('document.activeElement.blur();scrollTo({top:800,behavior:"instant"})');
     $page->assertScript('document.querySelector(".orbit-story-header").getBoundingClientRect().bottom<=.1', true)

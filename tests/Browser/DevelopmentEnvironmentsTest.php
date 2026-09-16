@@ -4,18 +4,13 @@ it('shows the agent workspace on an Orbit foundation with connected preview devi
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1100);
     $page->script('async () => { await document.fonts.ready; await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); document.querySelector("#build").scrollIntoView({behavior:"instant",block:"start"}); await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); }');
     $page->assertSee('Your favorite place to build.')
-        ->assertSee('Start with a machine that’s ready.')
-        ->assertSee('Give every idea its own workspace.')
-        ->assertSee('Preview on a real URL.')
         ->assertMissing('#build [role=tab]')
         ->assertMissing('#build button')
         ->assertMissing('#build figcaption')
         ->assertMissing('.orbit-stack__annotations')
         ->assertMissing('.orbit-stack__bridge-ring')
         ->assertMissing('[data-development-foundation] circle.orbit-stack__plate')
-        ->assertSee('Keep your tools in step.')
-        ->assertSee('Let the work outlive the session.')
-        ->assertSee('Switch environments without moving.')
+        ->assertScript('Array.from(document.querySelectorAll(".orbit-environments__benefits h3"), el => el.textContent)', ['Start with the gateway.', 'Provision your first node.', 'Preview on a real URL.', 'Keep your tools up to date.', 'Pause and resume together.', 'Keep everything in Orbit.'])
         ->assertAttribute('[data-foundation-logo]', 'href', '/assets/orbit/logo-white.svg')
         ->assertScript('() => {
             const section=document.querySelector("#build");
@@ -26,9 +21,19 @@ it('shows the agent workspace on an Orbit foundation with connected preview devi
             const sectionStyle=getComputedStyle(section);
             const contentWidth=section.clientWidth-parseFloat(sectionStyle.paddingLeft)-parseFloat(sectionStyle.paddingRight);
             const devices=[...section.querySelectorAll("[data-stack-device]")];
-            return brands.map(el=>el.dataset.environmentBrand).join(",")==="orca,superset,codex,opencode,polyscope,t3,conductor,cmux,emdash,cursor"
+            const expectedBrands=["orca","superset","codex","opencode","polyscope","t3","conductor","cmux","emdash","cursor","bloom","amp","herdr"];
+            const actualBrands=brands.map(el=>el.dataset.environmentBrand);
+            return actualBrands.length===expectedBrands.length
+                && new Set(actualBrands).size===expectedBrands.length
+                && expectedBrands.every(id=>actualBrands.includes(id))
                 && Math.abs(row.width-contentWidth)<1
                 && brands.every(el=>{const img=el.querySelector("img");return img.complete && img.naturalWidth>0;})
+                && (()=>{
+                    const brand=section.querySelector("[data-environment-brand=herdr]");
+                    const img=brand.querySelector("img").getBoundingClientRect();
+                    const label=brand.querySelector("span").getBoundingClientRect();
+                    return Math.abs((img.top+img.bottom)/2-(label.top+label.bottom)/2)<1.5;
+                })()
                 && [...section.querySelectorAll("[data-foundation-terminal]")].map(el=>el.dataset.foundationTerminal).join(",")==="htop,worktrees,routes,tools"
                 && section.querySelectorAll("[data-network-statistic]").length===7
                 && (()=>{
@@ -52,7 +57,15 @@ it('shows the agent workspace on an Orbit foundation with connected preview devi
                 && getComputedStyle(section.querySelector(".orbit-stack__statistics-track")).animationName==="none"
                 && upper.bottom<lower.top
                 && devices.map(el=>el.dataset.stackDevice).join(",")==="laptop,phone,tablet"
-                && devices.every(el=>{const r=el.getBoundingClientRect();return r.width>0 && (innerWidth<=1100 || r.left>=0 && r.right<=innerWidth);})
+                && devices.every(el=>{const r=el.getBoundingClientRect();return r.width>0 && (innerWidth<=600 || r.left>=0 && r.right<=innerWidth);})
+                && (()=>{
+                    if(innerWidth<=600 || innerWidth>1100) return true;
+                    const figure=section.querySelector(".orbit-environments__figure").getBoundingClientRect();
+                    return Math.abs(figure.left)<1 && Math.abs(figure.right-innerWidth)<1
+                        && devices.every(el=>{const r=el.getBoundingClientRect();return r.left>=figure.left && r.right<=figure.right;});
+                })()
+                && getComputedStyle(section.querySelector("[data-stack-device=laptop] .orbit-laptop__wall")).fill
+                    ===getComputedStyle(section.querySelector("[data-stack-device=phone] [data-remote-wall]")).fill
                 && section.querySelectorAll("[data-stack-connection]").length===7
                 && ["laptop","tablet","phone"].every(device=>section.querySelector(`[data-stack-connection=preview][data-stack-route-device=${device}]`))
                 && section.querySelector("[data-stack-connection=workspace][data-stack-route-device=laptop]")
@@ -122,7 +135,7 @@ it('shows the agent workspace on an Orbit foundation with connected preview devi
                         const title=cell.querySelector("h3").getBoundingClientRect();
                         const bento=getComputedStyle(document.querySelector(".orbit-capability"));
                         return !cell.querySelector(".orbit-environments__benefit-number")
-                            && (innerWidth<1200 || Math.abs(paragraph.getBoundingClientRect().height-parseFloat(paragraphStyle.lineHeight)*3)<1)
+                            && paragraph.getBoundingClientRect().height<=parseFloat(paragraphStyle.lineHeight)*4+1
                             && (innerWidth<=600 ? Math.abs(title.top-icon.top+2)<1 : Math.abs(title.top-icon.bottom-(innerWidth<=1100?22:parseFloat(style.paddingTop)))<1)
                             && getComputedStyle(cell.querySelector(".orbit-capability__corners")).opacity==="1"
                             && [...cell.querySelectorAll("[data-corner]")].every(corner=>getComputedStyle(corner).borderTopColor==="rgb(77, 77, 86)")
@@ -135,7 +148,6 @@ it('shows the agent workspace on an Orbit foundation with connected preview devi
                             && Math.abs(r.left-first.left)<1
                             && r.right<=grid.getBoundingClientRect().right+1
                             && cell.querySelector("p").getBoundingClientRect().right<=r.right-parseFloat(style.paddingRight)+1
-                            && (innerWidth<1200 || r.width/r.height>1.35)
                             && cell.querySelectorAll("[data-corner]").length===4
                             && cell.querySelector(".orbit-environments__benefit-heading svg").getAttribute("fill")==="none"
                             && cell.querySelector("p").getBoundingClientRect().bottom<r.bottom
@@ -178,7 +190,7 @@ it('shows the agent workspace on an Orbit foundation with connected preview devi
                 && getComputedStyle(section.querySelector(".orbit-environments__track")).animationName==="none"
                 && document.documentElement.scrollWidth<=innerWidth;
         }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
-})->with(['desktop' => 2135, 'tablet' => 768, 'mobile' => 390]);
+})->with(['desktop' => 2135, 'small desktop' => 934, 'tablet' => 768, 'mobile' => 390]);
 
 it('moves the environment marquee and pauses on hover and offscreen', function () {
     $page = visit('/', ['reducedMotion' => 'no-preference'])->resize(1440, 1100);

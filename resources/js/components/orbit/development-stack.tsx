@@ -205,7 +205,7 @@ function Plate({
 export function DevelopmentStack() {
     const bridgeId = useId();
     const ref = useRef<SVGSVGElement>(null);
-    useSceneViewport(ref, "0 0 1100 594", "210 0 680 640", "85 0 930 640");
+    useSceneViewport(ref, "0 0 1100 594", "210 0 680 640", "0 0 1100 640");
     return (
         <svg
             ref={ref}

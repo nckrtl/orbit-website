@@ -18,7 +18,7 @@ class HandleAppearance
     {
         $appearance = $request->cookie('appearance');
 
-        View::share('appearance', in_array($appearance, ['light', 'dark', 'system'], true) ? $appearance : 'system');
+        View::share('appearance', in_array($appearance, ['light', 'dark', 'system'], true) ? $appearance : 'dark');
 
         return $next($request);
     }

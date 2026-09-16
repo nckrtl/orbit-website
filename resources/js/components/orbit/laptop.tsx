@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import { observeSceneActivity } from "./animation";
 import { useEffect, useRef, useState } from "react";
 import { objectTransform, scalePoint } from "./object-scale";
@@ -14,6 +15,10 @@ const hingeX = 268;
 const hingeY = 272;
 const openAngle = Math.PI / 2;
 const processLabelScale = 0.85;
+const processTextX = 25;
+const processLabelVisualBottom = 25 * processLabelScale;
+const processConnectionGap = 12;
+const queueLabelOffset = processConnectionGap - processLabelScale;
 
 // An orthographic camera, turned toward the display. All surfaces use this
 // same projection, so the gentler viewing angle never introduces perspective taper.
@@ -159,9 +164,23 @@ const sceneAnchor = modelPoint(bodyAnchor);
 // Halve the leg below the body while retaining its projected depth angle.
 const claudeBendX = sceneAnchor[0] + (144 - sceneAnchor[0]) * 0.5;
 const claudeBendY = sceneAnchor[1] + ((claudeBendX - sceneAnchor[0]) * axisY[1]) / axisY[0];
-const claudeConnection = `M ${claudeBendX} 233 V ${claudeBendY} L ${sceneAnchor.join(" ")}`;
+const claudeLabelOriginX = 86;
+const claudeLabelOriginY = 208;
+const claudeConnectionStartY = claudeLabelOriginY + processLabelVisualBottom + processConnectionGap;
+const claudeConnection = `M ${claudeBendX} ${claudeConnectionStartY} V ${claudeBendY} L ${sceneAnchor.join(" ")}`;
+const claudeLabelRight = (claudeBendX - claudeLabelOriginX) / processLabelScale;
+const claudeIndicatorX = claudeLabelRight - 72 - 17;
 const codexAnchor = scalePoint([231, 371], scenePoint(modelCenter));
-const codexConnection = `M 126 313 H 177 L ${codexAnchor.join(" ")}`;
+const codexLabelOriginX = 30;
+const codexConnectionStartX = 126;
+const codexConnectionBendX = 177;
+const codexConnectionY =
+    codexAnchor[1] + ((codexConnectionBendX - codexAnchor[0]) * axisX[1]) / axisX[0];
+const codexLabelY = codexConnectionY - 17;
+const codexLabelRight =
+    (codexConnectionStartX - processConnectionGap - codexLabelOriginX) / processLabelScale;
+const codexIndicatorShift = codexLabelRight - 33 - processTextX;
+const codexConnection = `M ${codexConnectionStartX} ${codexConnectionY} H ${codexConnectionBendX} L ${codexAnchor.join(" ")}`;
 
 // One camera and one physical scale for the deck, devices, and network routes.
 // Device dimensions retain their portrait/landscape proportions before projection.
@@ -247,8 +266,14 @@ const schedulerAnchor = modelPoint([
     hingeX + axisX[0] * width + axisY[0] * 24,
     hingeY + axisX[1] * width + axisY[1] * 24 - (axisZ * bodyThickness) / 2,
 ]);
-const schedulerBendY = schedulerAnchor[1] + ((625 - schedulerAnchor[0]) * axisX[1]) / axisX[0];
-const schedulerConnection = `M 625 119 V ${schedulerBendY} L ${schedulerAnchor.join(" ")}`;
+const schedulerLabelOriginX = 550;
+const schedulerLabelOriginY = 86;
+const schedulerConnectionX = schedulerLabelOriginX + processTextX * processLabelScale;
+const schedulerConnectionStartY =
+    schedulerLabelOriginY + processLabelVisualBottom + processConnectionGap;
+const schedulerBendY =
+    schedulerAnchor[1] + ((schedulerConnectionX - schedulerAnchor[0]) * axisX[1]) / axisX[0];
+const schedulerConnection = `M ${schedulerConnectionX} ${schedulerConnectionStartY} V ${schedulerBendY} L ${schedulerAnchor.join(" ")}`;
 const handoffAnchor = [
     hingeX + axisX[0] * width + axisY[0] * 170,
     hingeY + axisX[1] * width + axisY[1] * 170 - (axisZ * bodyThickness) / 2,
@@ -547,13 +572,13 @@ export function Laptop() {
         let previousReveal = -1;
         let previous = -1;
         let currentPhase: Phase = "running";
-        const paint = () => {
+        const paint = (_time: number, scrollTop: number) => {
             frame = 0;
             if (disposed) return;
             if (dirty) {
                 const bounds = storyLayoutBounds(scene);
-                const revealEnd = storyEntranceEnd(bounds, window.scrollY, window.innerHeight);
-                start = laptopCloseStart(bounds, window.scrollY, window.innerHeight);
+                const revealEnd = storyEntranceEnd(bounds, scrollTop, window.innerHeight);
+                start = laptopCloseStart(bounds, scrollTop, window.innerHeight);
                 distance = Math.max(180, bounds.height * 0.42);
                 revealStart = revealEnd - Math.max(180, window.innerHeight * 0.3) + 40;
                 revealDistance = revealEnd - revealStart;
@@ -562,7 +587,7 @@ export function Laptop() {
                 // dissolve it as it leaves the viewport above the connection.
                 exitStart = Math.max(
                     start + distance + window.innerHeight * 0.08,
-                    bounds.bottom + window.scrollY - window.innerHeight * 0.35,
+                    bounds.bottom + scrollTop - window.innerHeight * 0.35,
                 );
                 exitDistance = Math.max(140, window.innerHeight * 0.3);
                 scene.dataset.exitStart = String(exitStart);
@@ -575,14 +600,14 @@ export function Laptop() {
             }
             const reveal = motion.matches
                 ? 1
-                : Math.max(0, Math.min(1, (window.scrollY - revealStart) / revealDistance));
+                : Math.max(0, Math.min(1, (scrollTop - revealStart) / revealDistance));
             if (reveal !== previousReveal) {
                 scene.dataset.revealProgress = reveal.toFixed(3);
                 previousReveal = reveal;
             }
             const exiting = motion.matches
                 ? 0
-                : Math.max(0, Math.min(1, (window.scrollY - exitStart) / exitDistance));
+                : Math.max(0, Math.min(1, (scrollTop - exitStart) / exitDistance));
             // Compact scenes sharpen in a quarter of the entrance interval,
             // giving the reader more time with the open laptop fully visible.
             const opacity = Math.min(1, reveal * revealRate) * (1 - exiting);
@@ -596,7 +621,7 @@ export function Laptop() {
             }
             const progress = motion.matches
                 ? 0
-                : Math.max(0, Math.min(1, (window.scrollY - start) / distance));
+                : Math.max(0, Math.min(1, (scrollTop - start) / distance));
             if (progress === previous) return;
             const eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
             angleRef.current = openAngle * (1 - eased);
@@ -633,7 +658,7 @@ export function Laptop() {
             previous = progress;
         };
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(paint);
+            if (!frame) frame = requestScrollFrame(paint);
         };
         const measure = () => {
             dirty = true;
@@ -641,7 +666,7 @@ export function Laptop() {
         };
         const observer = new ResizeObserver(measure);
         observer.observe(scene);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", measure);
         motion.addEventListener("change", schedule);
         void document.fonts.ready.then(() => {
@@ -650,9 +675,9 @@ export function Laptop() {
         schedule();
         return () => {
             disposed = true;
-            cancelAnimationFrame(frame);
+            cancelScrollFrame(frame);
             observer.disconnect();
-            window.removeEventListener("scroll", schedule);
+            stopScroll();
             window.removeEventListener("resize", measure);
             motion.removeEventListener("change", schedule);
             entrance.style.removeProperty("--laptop-layer-opacity");
@@ -859,16 +884,16 @@ export function Laptop() {
                         data-process="scheduler"
                         data-status={status}
                         className="orbit-laptop__process"
-                        transform={`translate(550 86) scale(${processLabelScale})`}
+                        transform={`translate(${schedulerLabelOriginX} ${schedulerLabelOriginY}) scale(${processLabelScale})`}
                     >
                         <g className="orbit-laptop__scheduler-indicator">
                             <circle cx="8" cy="0" r="7" />
                             <path d="M 8 -4 V 0 L 11 2" />
                         </g>
-                        <text x="25" y="4" className="orbit-laptop__process-name">
+                        <text x={processTextX} y="4" className="orbit-laptop__process-name">
                             Laravel scheduler
                         </text>
-                        <text x="25" y="22" className="orbit-laptop__process-detail">
+                        <text x={processTextX} y="22" className="orbit-laptop__process-detail">
                             cron · {active ? "ticking" : status}
                         </text>
                     </g>
@@ -883,18 +908,28 @@ export function Laptop() {
                         data-process="claude"
                         data-status={status}
                         className="orbit-laptop__process"
-                        transform={`translate(86 208) scale(${processLabelScale})`}
+                        transform={`translate(${claudeLabelOriginX} ${claudeLabelOriginY}) scale(${processLabelScale})`}
                     >
-                        <g transform="translate(8 0)">
+                        <g transform={`translate(${claudeIndicatorX} 0)`}>
                             <path
                                 className="orbit-laptop__claude-indicator"
                                 d="M 0 -7 V 7 M -7 0 H 7 M -5 -5 L 5 5 M -5 5 L 5 -5 M -3 -6 L 3 6 M -6 3 L 6 -3"
                             />
                         </g>
-                        <text x="25" y="4" className="orbit-laptop__process-name">
+                        <text
+                            x={claudeLabelRight}
+                            y="4"
+                            textAnchor="end"
+                            className="orbit-laptop__process-name"
+                        >
                             Claude Code
                         </text>
-                        <text x="25" y="22" className="orbit-laptop__process-detail">
+                        <text
+                            x={claudeLabelRight}
+                            y="22"
+                            textAnchor="end"
+                            className="orbit-laptop__process-detail"
+                        >
                             CLI · {active ? "editing" : status}
                         </text>
                     </g>
@@ -902,17 +937,30 @@ export function Laptop() {
                         data-process="codex"
                         data-status={status}
                         className="orbit-laptop__process"
-                        transform={`translate(30 296) scale(${processLabelScale})`}
+                        transform={`translate(${codexLabelOriginX} ${codexLabelY}) scale(${processLabelScale})`}
                     >
-                        <g className="orbit-laptop__codex-indicator">
+                        <g
+                            className="orbit-laptop__codex-indicator"
+                            transform={`translate(${codexIndicatorShift} 0)`}
+                        >
                             <rect x="1" y="-3" width="3" height="6" />
                             <rect x="6" y="-3" width="3" height="6" />
                             <rect x="11" y="-3" width="3" height="6" />
                         </g>
-                        <text x="25" y="4" className="orbit-laptop__process-name">
+                        <text
+                            x={codexLabelRight}
+                            y="4"
+                            textAnchor="end"
+                            className="orbit-laptop__process-name"
+                        >
                             Codex
                         </text>
-                        <text x="25" y="22" className="orbit-laptop__process-detail">
+                        <text
+                            x={codexLabelRight}
+                            y="22"
+                            textAnchor="end"
+                            className="orbit-laptop__process-detail"
+                        >
                             CLI · {active ? "reviewing" : status}
                         </text>
                     </g>
@@ -920,7 +968,7 @@ export function Laptop() {
                         data-process="queue"
                         data-status={status}
                         className="orbit-laptop__process"
-                        transform={`translate(${queueLabel[0] + 12} ${queueLabel[1]}) scale(${processLabelScale})`}
+                        transform={`translate(${queueLabel[0] + queueLabelOffset} ${queueLabel[1]}) scale(${processLabelScale})`}
                     >
                         <g className="orbit-laptop__queue-indicator">
                             <rect x="1" y="-7" width="12" height="3" />

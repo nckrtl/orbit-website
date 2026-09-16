@@ -173,7 +173,6 @@ type StarfieldProps = HTMLAttributes<HTMLDivElement> & {
     grid?: boolean;
     horizon?: boolean;
     scanlines?: boolean;
-    scrollRotate?: boolean;
     seed?: number;
     twinkle?: boolean;
 };
@@ -185,7 +184,6 @@ export function Starfield({
     grid = false,
     horizon = false,
     scanlines = false,
-    scrollRotate = false,
     seed = 7,
     twinkle = true,
     className = "",
@@ -287,8 +285,7 @@ export function Starfield({
 
     return (
         <div
-            className={`orbit-starfield ${fill ? "orbit-starfield--fill" : ""} ${grid ? "orbit-starfield--grid" : ""} ${horizon ? "orbit-starfield--horizon" : ""} ${scanlines ? "orbit-starfield--scanlines" : ""} ${scrollRotate ? "orbit-starfield--scroll" : ""} ${className}`}
-            data-scroll-stars={scrollRotate ? "" : undefined}
+            className={`orbit-starfield ${fill ? "orbit-starfield--fill" : ""} ${grid ? "orbit-starfield--grid" : ""} ${horizon ? "orbit-starfield--horizon" : ""} ${scanlines ? "orbit-starfield--scanlines" : ""} ${className}`}
             {...props}
         >
             <div ref={starsRef} className="orbit-starfield__stars" aria-hidden="true">

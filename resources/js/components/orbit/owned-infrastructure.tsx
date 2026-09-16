@@ -1,5 +1,14 @@
 import { observeSceneActivity } from "./animation";
-import { Activity, Boxes, RefreshCw, ServerCog, ShieldCheck, Wrench } from "lucide-react";
+import {
+    Activity,
+    Boxes,
+    Database,
+    GitBranch,
+    RefreshCw,
+    ServerCog,
+    ShieldCheck,
+    Wrench,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 
 const projection = Math.sqrt(3) / 2;
@@ -7,65 +16,91 @@ const plateRadius = 10;
 // Match the inner tiles' curves across the platform's 20-unit inset.
 const platformRadius = plateRadius + 20;
 const resources = [
-    { label: "projects", u: -192, v: -192 },
+    { label: "nodes", u: -192, v: -192 },
     { label: "apps", u: 0, v: -192 },
-    { label: "instances", u: 192, v: -192 },
-    { label: "nodes", u: -192, v: 0 },
-    { label: "processes", u: 192, v: 0 },
-    { label: "tools", u: -192, v: 192 },
-    { label: "updates", u: 0, v: 192 },
-    { label: "firewall", u: 192, v: 192 },
+    { label: "processes", u: 192, v: -192 },
+    { label: "instances", u: -192, v: 0 },
+    { label: "tools", u: 192, v: 0 },
+    { label: "databases", u: -192, v: 192 },
+    { label: "security", u: 0, v: 192 },
+    { label: "updates", u: 192, v: 192 },
 ];
 const notes = [
     {
-        title: "Your machines",
+        title: "Nodes",
+        order: 0,
         icon: ServerCog,
         copy: "Node configuration and instance placement. A shared picture of what belongs where.",
+        side: "left",
+        entry: "rear",
+        u: -300,
+        v: -192,
+    },
+    {
+        title: "Instances",
+        order: 2,
+        icon: GitBranch,
+        copy: "Each running copy of an app, with its own workspace, configuration, and private address.",
         side: "left",
         entry: "rear",
         u: -300,
         v: 0,
     },
     {
-        title: "Your tools",
-        icon: Wrench,
-        copy: "Installed tools and version constraints, ready for the agents working across your fleet.",
+        title: "Databases",
+        order: 4,
+        icon: Database,
+        copy: "The databases your apps depend on, tracked alongside the nodes and instances that use them.",
         side: "left",
         entry: "side",
         u: -192,
         v: 300,
     },
     {
-        title: "The state you intend",
-        icon: RefreshCw,
-        copy: "Updates and desired configuration in one place. Nodes converge when they fall behind.",
+        title: "Security",
+        order: 6,
+        icon: ShieldCheck,
+        copy: "Private networking, firewall policies, and checks that keep your nodes configured as intended.",
         side: "left",
         entry: "side",
-        u: 192,
+        u: 0,
         v: 300,
     },
     {
-        title: "Your applications",
+        title: "Apps",
+        order: 1,
         icon: Boxes,
-        copy: "Projects, repositories, apps, and the routes that make them reachable.",
+        copy: "Your apps and their repositories, with the instances and routes that make them reachable.",
         side: "right",
         entry: "rear",
         u: 0,
         v: -300,
     },
     {
-        title: "The work running",
+        title: "Processes",
+        order: 3,
         icon: Activity,
         copy: "Process definitions, commands, and status. Keep track of what each app needs to run.",
         side: "right",
-        entry: "side",
-        u: 300,
-        v: -192,
+        entry: "rear",
+        u: 192,
+        v: -300,
     },
     {
-        title: "The rules that protect it",
-        icon: ShieldCheck,
-        copy: "Firewall policies and checks that show whether each node is configured as intended.",
+        title: "Tools",
+        order: 5,
+        icon: Wrench,
+        copy: "Installed tools and version constraints, ready for the agents working across your nodes.",
+        side: "right",
+        entry: "side",
+        u: 300,
+        v: 0,
+    },
+    {
+        title: "Updates",
+        order: 7,
+        icon: RefreshCw,
+        copy: "Updates and desired configuration in one place. Nodes converge when they fall behind.",
         side: "right",
         entry: "side",
         u: 300,
@@ -260,6 +295,8 @@ export function OwnedInfrastructure() {
                         data-foundation-link={index}
                         data-foundation-target="platform"
                         data-foundation-entry={note.entry}
+                        data-foundation-resource={note.title.toLowerCase()}
+                        data-foundation-side={note.side}
                     />
                 ))}
             </svg>
@@ -270,7 +307,11 @@ export function OwnedInfrastructure() {
                 >
                     {notes.map((note, index) =>
                         note.side === side ? (
-                            <div key={note.title} data-foundation-note={index}>
+                            <div
+                                key={note.title}
+                                data-foundation-note={index}
+                                style={{ order: note.order }}
+                            >
                                 <note.icon
                                     className="orbit-foundation__note-icon"
                                     size={26}
@@ -293,8 +334,9 @@ export function OwnedInfrastructure() {
                 >
                     <title id="foundation-drawing-title">The Orbit core</title>
                     <desc id="foundation-drawing-description">
-                        One shared platform stores projects, apps, instances, nodes, processes,
-                        tools, updates, and firewall rules, with the Orbit logo at its center.
+                        One shared platform stores nodes, apps, instances, processes, databases,
+                        tools, security, and updates, with a connected explanation for each and the
+                        Orbit logo at its center.
                     </desc>
                     <g data-foundation-core data-foundation-platform>
                         <Slab u={0} v={0} width={600} depth={600} lift={0} base />
@@ -321,14 +363,11 @@ export function OwnedInfrastructure() {
                         ))}
                         <g data-foundation-gateway>
                             <Slab u={0} v={0} width={176} depth={176} lift={8} />
-                            <image
+                            {/* Inline geometry keeps mobile SVG rendering independent of images and filters. */}
+                            <path
                                 data-foundation-core-logo
-                                href="/assets/orbit/logo-white.svg"
-                                x="-34"
-                                y="-34"
-                                width="68"
-                                height="68"
-                                transform={`matrix(${projection} .5 ${-projection} .5 ${x} ${y})`}
+                                d="M50 25C77.6143 25 100 36.1929 100 50C99.9996 63.8069 77.614 75 50 75C22.386 75 0.000366987 63.8069 0 50C0 36.1929 22.3858 25 50 25ZM49.7764 32.0107C32.7857 32.0108 15.7344 38.9923 15.7344 46.9102C15.7346 54.8279 28.3485 61.2461 49.5654 61.2461C70.7823 61.2461 83.3962 54.8279 83.3965 46.9102C83.3965 38.9923 66.7672 32.0107 49.7764 32.0107Z"
+                                transform={`matrix(${projection} .5 ${-projection} .5 ${x} ${y}) translate(-34 -34) scale(.68)`}
                             />
                         </g>
                         {notes.map(({ title, u, v, entry }, index) => {

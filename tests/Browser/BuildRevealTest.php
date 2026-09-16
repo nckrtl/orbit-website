@@ -1,6 +1,6 @@
 <?php
 
-it('reveals the workspace illustration and benefits grid as groups while staggering build copy', function (int $width, bool $reduced) {
+it('fades the workspace and logo strip as groups while staggering build copy without blur', function (int $width, bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
     $page->assertScript('async () => {
         await document.fonts.ready;
@@ -9,7 +9,9 @@ it('reveals the workspace illustration and benefits grid as groups while stagger
         await settle();
         const parts = [...section.querySelectorAll("[data-build-reveal]")];
         const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-        if (parts.length < 13 || parts.some(el => !Number.isFinite(Number(el.dataset.buildRevealStart)))) return false;
+        if (parts.length < 7 || parts.some(el => !Number.isFinite(Number(el.dataset.buildRevealStart)))) return false;
+        const marquee = section.querySelector(".orbit-environments__marquee");
+        if (!marquee.hasAttribute("data-build-reveal") || marquee.querySelector("[data-build-reveal]")) return false;
         const figure = section.querySelector(".orbit-environments__figure");
         if (!figure.hasAttribute("data-build-reveal") || figure.querySelector("[data-build-reveal]")) return false;
         const benefits = section.querySelector(".orbit-environments__benefits");
@@ -17,6 +19,7 @@ it('reveals the workspace illustration and benefits grid as groups while stagger
         if (benefits.querySelectorAll("article").length !== 6) return false;
         const groups = [
             [...section.querySelectorAll(".orbit-environments__heading [data-build-reveal]")],
+            [marquee],
             [figure],
             [benefits]
         ];
@@ -32,7 +35,7 @@ it('reveals the workspace illustration and benefits grid as groups while stagger
                 continue;
             }
             const partial = Number(getComputedStyle(first).opacity);
-            if (partial < .4 || partial > .6 || !getComputedStyle(first).filter.startsWith("blur(")) return false;
+            if (partial < .4 || partial > .6 || group.some(el => getComputedStyle(el).filter !== "none")) return false;
             if (group.length > 1 && !(Number(getComputedStyle(last).opacity) < partial)) return false;
             scrollTo({top:Number(last.dataset.buildRevealEnd)+5,behavior:"instant"});
             await settle();

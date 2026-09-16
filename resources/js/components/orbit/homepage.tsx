@@ -1,6 +1,8 @@
+import { PageStarfield } from "./page-starfield";
+import { cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
-import { ButtonLink, Logo, Starfield } from "./primitives";
+import { ButtonLink, Logo } from "./primitives";
 import { Install } from "./install";
 import { Laptop } from "./laptop";
 import { PremiseScene, StoryHandoff, TopologyScene, type StoryRoles } from "./story-handoff";
@@ -15,6 +17,7 @@ import { useScrollReveal } from "./use-scroll-reveal";
 import { foundationSequence } from "./finale-reveal";
 import { MobileMenu } from "./mobile-menu";
 import { useHeaderScroll } from "./use-header-scroll";
+import { ThemeMenu } from "./theme-menu";
 
 const githubUrl = "https://github.com/nckrtl/orbit";
 // Set to true to restore the intro's clipped constellation and ticked divider.
@@ -43,7 +46,7 @@ const chapters: Chapter[] = [
         step: "01",
         kicker: "The problem",
         title: "Local development stops when your laptop does.",
-        body: "A local environment is hard to beat — until agents start doing the work. Agents do their best work in long, unattended runs. Queues and schedulers need to keep ticking. You want to open the preview on your phone. Close the lid, and all of it stops.",
+        body: "A local environment is hard to beat until agents start doing the work. Agents do their best work in long, unattended runs. Queues and schedulers need to keep ticking. You want to open the preview on your phone. Close the lid, and all of it stops.",
         aside: "Leaving the laptop on all night is not an environment. It is a workaround.",
         caption: "lid closes · work stops",
         type: "laptop",
@@ -77,40 +80,17 @@ function usePageMotion(
 ) {
     useEffect(() => {
         const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-        const compact = window.matchMedia("(max-width: 1100px)");
         let frame = 0;
-        let settleTimer: ReturnType<typeof setTimeout> | null = null;
-        const starfield = document.querySelector<HTMLElement>("[data-page-stars]");
         const dividerMarks = document.querySelectorAll<HTMLElement>(
             "[data-story-divider] .orbit-story-ruler__marks, [data-story-divider] .orbit-story-hatch, [data-install-ruler] .orbit-story-ruler__marks",
         );
-        let needsMeasure = true;
-        let scrollRange = 1;
+        let wasScrolled: boolean | undefined;
 
-        const paint = () => {
+        const paint = (_time: number, scrollY: number) => {
             frame = 0;
-            const scrollY = window.scrollY || 0;
-            // Layout and overscan only change on resize, never on scroll.
-            if (needsMeasure) {
-                const bounds = starfield?.getBoundingClientRect();
-                scrollRange = Math.max(
-                    1,
-                    document.documentElement.scrollHeight - window.innerHeight,
-                );
-                if (starfield && bounds) {
-                    starfield.style.setProperty(
-                        "--starfield-pad-x",
-                        `${compact.matches ? 0 : bounds.height * 0.08}px`,
-                    );
-                    starfield.style.setProperty(
-                        "--starfield-pad-y",
-                        `${compact.matches ? 0 : bounds.width * 0.08}px`,
-                    );
-                }
-                needsMeasure = false;
-            }
-            if (headerWash.current) {
-                const scrolled = scrollY > 0;
+            const scrolled = scrollY > 0;
+            if (headerWash.current && scrolled !== wasScrolled) {
+                wasScrolled = scrolled;
                 headerWash.current.style.opacity = scrolled ? "1" : "0";
                 headerWash.current.parentElement?.setAttribute("data-scrolled", String(scrolled));
             }
@@ -125,42 +105,22 @@ function usePageMotion(
             dividerMarks.forEach((marks) => {
                 marks.style.backgroundPositionX = `${offset}px, ${offset}px`;
             });
-            if (starfield) {
-                // One continuous star plane and one scroll angle for the whole
-                // page, including the transition from the intro to the story.
-                const progress = Math.max(0, Math.min(1, scrollY / scrollRange));
-                // Keep the full-page texture static on smaller devices. Local
-                // scenes still move without compositing a rotated, page-sized layer.
-                const angle = query.matches || compact.matches ? 0 : progress * 6;
-                starfield.style.setProperty("--starfield-rotation", `${angle}deg`);
-            }
         };
 
         const schedule = () => {
             if (!frame) {
-                frame = requestAnimationFrame(paint);
+                frame = requestScrollFrame(paint);
             }
         };
 
-        const measure = () => {
-            needsMeasure = true;
-            schedule();
-        };
-        const resize = new ResizeObserver(measure);
-        if (starfield) resize.observe(starfield);
-        window.addEventListener("scroll", schedule, { passive: true });
-        window.addEventListener("resize", measure);
+        const stopScroll = observeScroll(schedule);
         query.addEventListener("change", schedule);
         schedule();
-        settleTimer = setTimeout(measure, 400);
 
         return () => {
-            resize.disconnect();
-            window.removeEventListener("scroll", schedule);
-            window.removeEventListener("resize", measure);
+            stopScroll();
             query.removeEventListener("change", schedule);
-            if (settleTimer) clearTimeout(settleTimer);
-            if (frame) cancelAnimationFrame(frame);
+            if (frame) cancelScrollFrame(frame);
         };
     }, [firstRuler, headerWash, secondRuler]);
 }
@@ -183,6 +143,7 @@ function Header({ washRef }: { washRef: RefObject<HTMLDivElement | null> }) {
                 <ButtonLink href="#install" size="sm" className="ml-auto">
                     Get started
                 </ButtonLink>
+                <ThemeMenu />
                 <MobileMenu />
             </div>
         </header>
@@ -212,15 +173,15 @@ function Hero({ rulerRef }: { rulerRef: RefObject<HTMLDivElement | null> }) {
                                 data-hero-enter="title"
                                 className="mx-auto max-w-[32ch] text-[clamp(42px,5vw,80px)] leading-[0.98] font-medium tracking-[-0.035em] text-balance"
                             >
-                                Build your ideas on machines you own, run by your agent.
+                                Build ideas faster on machines you own, run by your agent.
                             </h1>
                             <p
                                 data-hero-enter="description"
                                 className="mx-auto mt-[26px] max-w-[72ch] text-lg leading-[1.58] tracking-[-0.018em] text-pretty text-orbit-secondary"
                             >
                                 Orbit turns the machines you already own into an always-on
-                                development network — provisioned, routed, and repaired by your
-                                agent, reachable from every device you carry.
+                                development network. Your agent provisions, routes, and repairs it.
+                                You can reach it from every device you carry.
                             </p>
                             <div
                                 data-cta
@@ -364,9 +325,12 @@ function Story() {
                                     {chapter.body}
                                 </p>
                                 {chapter.aside ? (
-                                    <p className="mt-5 max-w-[52ch] text-sm leading-[1.6] text-orbit-muted">
-                                        {chapter.aside}
-                                    </p>
+                                    <blockquote
+                                        data-story-quote
+                                        className="orbit-story-chapter__quote relative mt-6 max-w-[52ch] pb-0.5 pl-[22px] text-base leading-[1.62] text-orbit-secondary italic"
+                                    >
+                                        <p>{chapter.aside}</p>
+                                    </blockquote>
                                 ) : null}
                             </div>
                         </div>
@@ -400,8 +364,9 @@ function OwnedMachine() {
                         </h2>
                         <p className="mx-auto mt-6 max-w-[62ch] text-[17px] leading-[1.6] text-pretty text-orbit-secondary">
                             Everything Orbit knows about your setup lives in one record on your
-                            Gateway: machines, apps, processes, tools, rules. Agents, environments,
-                            and nodes can come and go. The record stays, and it stays yours.
+                            Gateway: nodes, apps, instances, processes, databases, tools, security,
+                            and updates. Agents and environments can come and go. The record stays,
+                            and it stays yours.
                         </p>
                     </div>
                 </div>
@@ -442,15 +407,7 @@ export function OrbitHomepage({ orbitUrl }: { orbitUrl: string }) {
             id="top"
             className="relative isolate min-h-screen overflow-x-clip bg-orbit-void text-orbit-primary antialiased"
         >
-            <Starfield
-                // The CSS texture supplies the dense background; reserve DOM
-                // elements and intersection tracking for a few local twinkles.
-                density={2.4}
-                fill
-                scrollRotate
-                className="orbit-page-starfield"
-                data-page-stars=""
-            />
+            <PageStarfield />
             <Header washRef={headerWash} />
             <main>
                 <Hero rulerRef={firstRuler} />

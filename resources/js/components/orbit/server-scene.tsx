@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame } from "./animation";
 import { useEffect, useId, useRef } from "react";
 import {
     ControlLaptop,
@@ -27,11 +28,18 @@ const serverCenter = project(server.width / 2, server.depth / 2, origin, serverD
 const lowerPortX =
     (topPort[0] - origin[0] - hardwarePoint(0, server.depth)[0]) / hardwarePoint(1, 0)[0];
 const growthPort = project(lowerPortX, server.depth, origin, serverDrop);
-// Split the two visible walls at the middle of their shared rounded corner.
+// Locate the tablet port midway around the shared rounded corner.
 const cornerInset = 10 * (1 - Math.SQRT1_2);
 const corner = project(server.width - cornerInset, server.depth - cornerInset, origin);
 const laptopScale = 1.12;
-const laptopOffset: Point = [-60, -288];
+const originalLaptopServerPort = scalePoint(project(6, server.depth, origin, 24), serverCenter);
+const laptopServerPort = scalePoint(project(0, server.depth, origin, serverDrop), serverCenter);
+// Carry the laptop and its route down by the same vector so the existing cable
+// angles land exactly on the front wall's lower-left corner.
+const laptopOffset: Point = [
+    -60 + laptopServerPort[0] - originalLaptopServerPort[0],
+    -288 + laptopServerPort[1] - originalLaptopServerPort[1],
+];
 const devices = {
     phone: { x: 615, y: 160, width: 42, height: 84, thickness: 3.5, radius: 5 },
     tablet: { x: 555, y: 415, width: 162, height: 116, thickness: 4.6, radius: 5 },
@@ -64,8 +72,9 @@ const devicePorts = {
     ),
 };
 const serverPorts = {
-    laptop: scalePoint(project(6, server.depth, origin, 24), serverCenter),
-    phone: scalePoint(project(server.width, 45, origin, 104), serverCenter),
+    laptop: laptopServerPort,
+    // This is the visually lower-right corner of the Gateway's side wall.
+    phone: scalePoint(project(server.width, 0, origin, serverDrop), serverCenter),
     tablet: scalePoint([corner[0], corner[1] + serverDrop], serverCenter),
 };
 
@@ -214,12 +223,12 @@ export function PremiseScene() {
         let top = 0,
             height = 1,
             last = -1;
-        const update = () => {
+        const update = (_time: number, scrollTop: number) => {
             frame = 0;
             if (disposed) return;
             if (dirty) {
                 const rect = storyLayoutBounds(svg);
-                top = rect.top + scrollY;
+                top = rect.top + scrollTop;
                 height = rect.height;
                 dirty = false;
             }
@@ -229,7 +238,7 @@ export function PremiseScene() {
             const distance = Math.max(180, Math.min(280, height * 0.4));
             const progress = motion.matches
                 ? 1
-                : Math.max(0, Math.min(1, (scrollY - start) / distance));
+                : Math.max(0, Math.min(1, (scrollTop - start) / distance));
             svg.dataset.scrollStart = String(start);
             svg.dataset.scrollEnd = String(start + distance);
             if (progress === last) return;
@@ -244,7 +253,7 @@ export function PremiseScene() {
                 progress === 0 ? "closed" : progress === 1 ? "open" : "opening";
         };
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(update);
+            if (!frame) frame = requestScrollFrame(update);
         };
         const resize = () => {
             dirty = true;
@@ -263,7 +272,7 @@ export function PremiseScene() {
         const size = new ResizeObserver(resize);
         observer.observe(svg);
         size.observe(svg);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", resize);
         document.addEventListener("visibilitychange", activity);
         motion.addEventListener("change", activity);
@@ -273,10 +282,10 @@ export function PremiseScene() {
         activity();
         return () => {
             disposed = true;
-            cancelAnimationFrame(frame);
+            cancelScrollFrame(frame);
             observer.disconnect();
             size.disconnect();
-            window.removeEventListener("scroll", schedule);
+            stopScroll();
             window.removeEventListener("resize", resize);
             document.removeEventListener("visibilitychange", activity);
             motion.removeEventListener("change", activity);
@@ -331,11 +340,6 @@ export function PremiseScene() {
                             Gateway
                         </text>
                     </g>
-                    <path
-                        data-server-corner
-                        d={`M ${corner.join(" ")} v ${serverDrop}`}
-                        className="orbit-laptop__edge"
-                    />
                     <g
                         data-server-side
                         transform={`matrix(${hardwarePoint(0, 1).join(" ")} 0 ${Math.cos(Math.PI / 6)} ${project(server.width, 0, origin).join(" ")})`}

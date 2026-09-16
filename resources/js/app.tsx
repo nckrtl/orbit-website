@@ -1,6 +1,9 @@
 import "../css/app.css";
 
 import { createInertiaApp } from "@inertiajs/react";
+import { initializeTheme } from "@/hooks/use-appearance";
+
+initializeTheme();
 
 createInertiaApp({
     title: (title) =>

@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame, setSceneHidden } from "./animation";
 import { useEffect, useRef } from "react";
 import {
     storyCopyBounds,
@@ -39,11 +40,15 @@ export function useHeroScroll() {
         let currentExit = 0;
         let previousTime = 0;
         let parallax = 0;
+        let lastPaint = "";
 
-        const paint = (time: number) => {
+        const paint = (time: number, scrollTop: number) => {
             frame = 0;
-            const progress = scrollY / viewportHeight;
-            const target = Math.min(1, Math.max(0, (scrollY - exitStart) / (exitEnd - exitStart)));
+            const progress = scrollTop / viewportHeight;
+            const target = Math.min(
+                1,
+                Math.max(0, (scrollTop - exitStart) / (exitEnd - exitStart)),
+            );
             const elapsed = previousTime ? Math.min(50, time - previousTime) : 16;
             previousTime = time;
             // Smooth wheel/trackpad jumps inside the range. At either boundary,
@@ -60,19 +65,36 @@ export function useHeroScroll() {
                   ? Number(progress < 0.3)
                   : 1 - currentExit;
             const hidden = pinned && opacity === 0;
+            const networkOffset = reducedMotion.matches
+                ? 0
+                : Math.min(Math.max(0, scrollTop), exitEnd) * parallax;
+            const signature = [
+                opacity,
+                currentExit,
+                networkOffset,
+                pinned,
+                reducedMotion.matches,
+            ].join(",");
+            // Reassigning even unchanged custom properties invalidates styles
+            // in descendants. The settled hero needs no work farther down-page.
+            if (signature === lastPaint) return;
+            lastPaint = signature;
 
             content.style.setProperty("--hero-copy-opacity", String(opacity));
             content.dataset.exitProgress = String(currentExit);
             // Follow a small fraction of the scroll, while the page still
             // carries the constellation upward. Stop once the intro has cleared.
-            network?.style.setProperty(
-                "--hero-network-offset",
-                `${reducedMotion.matches ? 0 : Math.min(Math.max(0, scrollY), exitEnd) * parallax}px`,
-            );
+            network?.style.setProperty("--hero-network-offset", `${networkOffset}px`);
             network?.style.setProperty(
                 "--hero-network-exit-opacity",
                 String(pinned && !reducedMotion.matches ? 1 - currentExit : 1),
             );
+            if (network)
+                setSceneHidden(
+                    network,
+                    "hero-exit",
+                    pinned && !reducedMotion.matches && currentExit === 1,
+                );
             // Fit the stagger inside the existing scroll range so the final
             // label clears before the next section. Scrolling up reverses it.
             const itemRange = 1 - lastExitOrder * exitStep;
@@ -85,10 +107,6 @@ export function useHeroScroll() {
                           : 1 -
                             Math.min(1, Math.max(0, (1 - opacity - order * exitStep) / itemRange));
                 element.style.setProperty("--hero-copy-item-opacity", String(itemOpacity));
-                element.style.setProperty(
-                    "--hero-copy-exit-filter",
-                    itemOpacity === 1 ? "none" : "blur(var(--hero-copy-exit-blur))",
-                );
                 element.inert = itemOpacity === 0;
                 if (element.inert && element.contains(document.activeElement)) {
                     (document.activeElement as HTMLElement).blur();
@@ -100,17 +118,18 @@ export function useHeroScroll() {
                 (document.activeElement as HTMLElement).blur();
             }
             if (pinned && !reducedMotion.matches && currentExit !== target) {
-                frame = requestAnimationFrame(paint);
+                frame = requestScrollFrame(paint);
             } else {
                 previousTime = 0;
             }
         };
 
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(paint);
+            if (!frame) frame = requestScrollFrame(paint);
         };
 
         const measure = () => {
+            lastPaint = "";
             viewportHeight = innerHeight;
             parallax = Number(getComputedStyle(content).getPropertyValue("--hero-parallax"));
             const duration = getComputedStyle(content)
@@ -156,7 +175,7 @@ export function useHeroScroll() {
         if (firstChapter) resize.observe(firstChapter);
         if (storyCopy) resize.observe(storyCopy);
         if (laptop) resize.observe(laptop);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", measure);
         window.addEventListener("pageshow", measure);
         desktop.addEventListener("change", measure);
@@ -165,8 +184,8 @@ export function useHeroScroll() {
 
         return () => {
             resize.disconnect();
-            cancelAnimationFrame(frame);
-            window.removeEventListener("scroll", schedule);
+            cancelScrollFrame(frame);
+            stopScroll();
             window.removeEventListener("resize", measure);
             window.removeEventListener("pageshow", measure);
             desktop.removeEventListener("change", measure);
@@ -177,13 +196,13 @@ export function useHeroScroll() {
             content.style.removeProperty("--hero-copy-opacity");
             network?.style.removeProperty("--hero-network-offset");
             network?.style.removeProperty("--hero-network-exit-opacity");
+            if (network) setSceneHidden(network, "hero-exit", false);
             delete content.dataset.exitStart;
             delete content.dataset.exitEnd;
             delete content.dataset.exitProgress;
             content.inert = false;
             items.forEach(({ element }) => {
                 element.style.removeProperty("--hero-copy-item-opacity");
-                element.style.removeProperty("--hero-copy-exit-filter");
                 element.inert = false;
             });
         };

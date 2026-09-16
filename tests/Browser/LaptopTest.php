@@ -139,6 +139,8 @@ it('frames the open laptop with peripheral detail cropped on phones and reduced 
                     && name.height > 0 && detail.height > 0 && name.bottom < detail.top;
             });
             return cropped && compactLabels && Math.abs(face.c) < 0.001 && face.d > 0.8
+                && getComputedStyle(document.querySelector("[data-body-wall]")).fill
+                    === getComputedStyle(document.querySelector("[data-device-wall]")).fill
                 && Math.atan2(face.b, face.a) < 15 * Math.PI / 180
                 && bounds.every(b => b.left >= scene.left && b.right <= scene.right
                     && b.top >= scene.top && b.bottom <= scene.bottom);
@@ -242,33 +244,13 @@ it('shrinks the taller laptop devices while preserving projection and connected 
         ->assertNoConsoleLogs();
 })->with(['desktop' => 1560, 'mobile' => 390]);
 
-it('runs literal star keyframes and releases offscreen star animations while the laptop is visible', function () {
+it('keeps stars free of fading through the laptop and on return to the intro', function () {
     $page = visit('/', ['reducedMotion' => 'no-preference']);
-    $page->script('window.scrollTo({top: 0, behavior: "instant"})');
-    $page->assertScript('() => {
-        window.heroTwinkleStars = Array.from(document.querySelectorAll("[data-page-stars] .orbit-star--twinkle"))
-            .filter(star => star.getAnimations()[0]?.playState === "running");
-        const animation = window.heroTwinkleStars[0]?.getAnimations()[0];
-        return animation?.playState === "running"
-            && animation.effect.getKeyframes().every(frame => Number.isFinite(Number(frame.opacity)));
-    }', true);
+    $page->assertScript('document.querySelector("[data-page-stars]").getAnimations({subtree:true}).length', 0);
     $page->script('document.querySelector("[data-laptop]").scrollIntoView({block: "center"})');
-    $page->assertScript('() => {
-        const hero = window.heroTwinkleStars;
-        const story = Array.from(document.querySelectorAll("[data-page-stars] .orbit-star--twinkle"));
-        // Stars within the observer\'s 32px overscan may intentionally keep
-        // twinkling. Check the ones fully beyond that margin, not the seam.
-        const offscreen = story.filter(star => {
-            const box = star.getBoundingClientRect();
-            return box.bottom < -40 || box.top > innerHeight + 40 || box.right < -40 || box.left > innerWidth + 40;
-        });
-        return hero.length > 0 && offscreen.length > story.length / 2
-            && offscreen.every(star => star.getAnimations().length === 0)
-            && story.some(star => star.getAnimations()[0]?.playState === "running")
-            && story.filter(star => star.getAnimations()[0]?.playState === "running").length < story.length / 2;
-    }', true);
+    $page->assertScript('document.querySelector("[data-page-stars]").getAnimations({subtree:true}).length', 0);
     $page->script('window.scrollTo(0, 0)');
-    $page->assertScript('window.heroTwinkleStars.some(star => star.getAnimations()[0]?.playState === "running")', true)
+    $page->assertScript('document.querySelector("[data-page-stars]").getAnimations({subtree:true}).length', 0)
         ->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
 
@@ -294,6 +276,64 @@ it('anchors the scheduler to the body and gives the problem copy room on desktop
             && padding;
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 })->with(['desktop' => 1482, 'mobile' => 390]);
+
+it('aligns the process labels and their icons with the laptop connections', function () {
+    $page = visit('/', ['reducedMotion' => 'reduce'])->resize(1482, 1000);
+    $page->script('document.querySelector("[data-laptop]").scrollIntoView({block: "center"})');
+
+    $page->assertScript('() => {
+        const connectionStart = selector => {
+            const path = document.querySelector(selector);
+            return path.getPointAtLength(0).matrixTransform(path.getScreenCTM());
+        };
+        const connectionEnd = selector => {
+            const path = document.querySelector(selector);
+            return path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM());
+        };
+        const label = name => {
+            const process = document.querySelector(`[data-process=${name}]`);
+            return {
+                block: process.getBoundingClientRect(),
+                name: process.querySelector(".orbit-laptop__process-name").getBoundingClientRect(),
+                detail: process.querySelector(".orbit-laptop__process-detail").getBoundingClientRect(),
+            };
+        };
+        const claude = label("claude");
+        const codex = label("codex");
+        const scheduler = label("scheduler");
+        const queue = label("queue");
+        const claudeIcon = document.querySelector(".orbit-laptop__claude-indicator").getBoundingClientRect();
+        const codexIcon = document.querySelector(".orbit-laptop__codex-indicator").getBoundingClientRect();
+        const claudeStart = connectionStart("[data-claude-connection]");
+        const codexStart = connectionStart("[data-codex-connection]");
+        const schedulerStart = connectionStart("[data-scheduler-connection]");
+        const queueEnd = connectionEnd("[data-queue-connection]");
+        const [, connectionY, bendX, anchorX, anchorY] = document.querySelector("[data-codex-connection]")
+            .getAttribute("d").match(/-?\d+(?:\.\d+)?/g).map(Number);
+        const deck = document.querySelector("[data-deck]").getCTM();
+        const codexSlope = (anchorY - connectionY) / (anchorX - bendX);
+        const connectionGaps = [
+            claudeStart.y - claude.detail.bottom,
+            codexStart.x - Math.max(codex.name.right, codex.detail.right),
+            schedulerStart.y - scheduler.detail.bottom,
+            queue.block.left - queueEnd.x,
+        ];
+
+        return Math.abs(claude.name.right - claude.detail.right) < 0.5
+            && Math.abs(claude.detail.right - claudeStart.x) < 0.5
+            && claude.name.left - claudeIcon.right > 2
+            && claude.name.left - claudeIcon.right < 6
+            && Math.abs(codex.name.right - codex.detail.right) < 0.5
+            && codex.name.left - codexIcon.right > 6
+            && codex.name.left - codexIcon.right < 10
+            && Math.abs(scheduler.name.left - schedulerStart.x) < 0.5
+            && connectionGaps.every(gap => gap > 10 && gap < 14)
+            && Math.max(...connectionGaps) - Math.min(...connectionGaps) < 1.5
+            && Math.abs(codexSlope - deck.b / deck.a) < 0.001;
+    }', true)
+        ->assertNoJavaScriptErrors()
+        ->assertNoConsoleLogs();
+});
 
 it('rounds the laptop faces and joins the base wall to the same curved perimeter', function (int $width) {
     $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);

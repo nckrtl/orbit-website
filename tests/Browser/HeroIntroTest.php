@@ -22,8 +22,12 @@ it('keeps server rendered intro copy invisible before gradually revealing it wit
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
 });
 
-it('brings the navigation into focus promptly without moving', function (int $width) {
+it('brings the navigation into focus promptly without moving', function (int $width, bool $light) {
     $page = visit('/')->resize($width, 1000);
+    if ($light) {
+        $page->script('localStorage.setItem("appearance", "light"); document.cookie = "appearance=light;path=/"');
+        $page->refresh()->assertScript('document.documentElement.dataset.appearance', 'light');
+    }
     $page->assertScript('() => {
         const header = document.querySelector(".orbit-story-header");
         const animation = header.getAnimations()[0];
@@ -41,7 +45,7 @@ it('brings the navigation into focus promptly without moving', function (int $wi
         animation.finish();
         const end = header.getBoundingClientRect().top;
         return hidden && initiallySoft && (innerWidth<=1100 ? duration===700 : duration>=1600 && duration<=2000) && start === end && end === 0 && getComputedStyle(header).opacity === "1"
-            && samples[2].filter === "none" && getComputedStyle(header).filter === "none"
+            && samples[2].filter === "blur(0px)" && getComputedStyle(header).filter === "blur(0px)"
             && samples.every(sample => Math.abs(sample.opacity - sample.progress) < 0.01
                 && Math.abs(sample.top - (start + (end - start) * sample.progress)) < 0.1)
             && header.querySelectorAll("a").length === 5
@@ -66,7 +70,12 @@ it('brings the navigation into focus promptly without moving', function (int $wi
         const header = document.querySelector(".orbit-story-header");
         return header.getBoundingClientRect().top === 0 && getComputedStyle(header).opacity === "1";
     }', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
-})->with(['desktop' => 2083, 'mobile' => 390]);
+})->with([
+    'desktop dark' => [2083, false],
+    'mobile dark' => [390, false],
+    'desktop light' => [2083, true],
+    'mobile light' => [390, true],
+]);
 
 it('shows the navigation immediately with reduced motion', function () {
     $page = visit('/', ['reducedMotion' => 'reduce']);
@@ -102,7 +111,7 @@ it('brings hero copy into focus with a small drift that settles without overshoo
             const isLabel = ["open-source", "self-hosted", "agent-driven"].includes(part);
             const direction = isLabel ? -1 : 1;
             return hidden && initialBlur > 0 && getComputedStyle(element).opacity === "1"
-                && getComputedStyle(element).filter === "none"
+                && getComputedStyle(element).filter === "blur(0px)"
                 && samples.every((sample, index) => Math.abs(sample.opacity - sample.progress) < 0.01
                     && direction * (sample.top - end) >= -0.1
                     && direction * (sample.top - (index ? samples[index - 1].top : start)) <= 0.1
@@ -161,7 +170,7 @@ it('fades and blurs buttons then paragraph then title then grouped labels on scr
         elements[0].querySelector("a").focus({preventScroll: true});
         return restored.every(opacity => opacity === 1) && !content.inert
             && elements[0].contains(document.activeElement)
-            && elements.every(element => getComputedStyle(element).filter === "none");
+            && elements.every(element => getComputedStyle(element).filter === "blur(0px)");
         })().then(result => window.heroExitCheckPassed = result);
     }');
     $page->assertScript('window.heroExitCheckPassed', true)->assertNoJavaScriptErrors()->assertNoConsoleLogs();
@@ -329,7 +338,7 @@ it('fades the navigation backdrop in on scroll and clears it at the top', functi
         const header=document.querySelector(".orbit-story-header"), wash=header.querySelector(".orbit-story-header__wash");
         const bounds=header.getBoundingClientRect(), style=getComputedStyle(header);
         return (innerWidth<=1100 ? bounds.bottom<=.1 : bounds.top===0) && bounds.left===0 && Math.abs(bounds.width-innerWidth)<.1
-            && style.opacity==="1" && style.filter==="none"
+            && style.opacity==="1" && style.filter===(matchMedia("(prefers-reduced-motion: reduce)").matches ? "none" : "blur(0px)")
             && style.backdropFilter.includes("blur(14px)")
             && getComputedStyle(wash).opacity==="1"
             && header.querySelectorAll("a").length===5;

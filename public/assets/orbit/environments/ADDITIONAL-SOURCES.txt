@@ -6,4 +6,7 @@ cmux: https://www.cmux.dev/logo.png
 Emdash: https://emdash.sh/icon.svg (official dark-mode fill fixed for this dark section)
 Cursor: https://cursor.com/brand
   cursor-brand-assets.zip / General Logos/Cube/SVG/CUBE_2D_DARK.svg
-Retrieved 2026-09-09. Brand marks belong to their respective owners.
+Bloom: https://runbloom.app/favicon.svg
+Amp: https://ampcode.com/app-icon.svg
+Herdr: https://herdr.dev/assets/ram.svg
+Retrieved 2026-09-09 / 2026-09-14. Brand marks belong to their respective owners.

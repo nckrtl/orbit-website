@@ -276,7 +276,6 @@ function HeroConstellation() {
             });
         };
         const stop = animateScene(svg.closest("[data-hero-network]") ?? svg, draw, {
-            fps: () => (compact.matches ? 30 : 60),
             onActivity: ({ active, reducedMotion }) => {
                 svg.dataset.animating = String(active);
                 if (reducedMotion) {

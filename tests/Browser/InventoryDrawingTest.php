@@ -17,7 +17,7 @@ it('connects isometric inventory tiles using the same projection as the namespac
         if(![circle,latitudes].every(el=>getComputedStyle(el).strokeWidth==="1px"
             &&getComputedStyle(el).vectorEffect==="non-scaling-stroke")) return false;
         const namespaces=[...drawing.querySelectorAll("[data-inventory-item]")];
-        if(namespaces.map(el=>el.querySelector("text").textContent).join(",")!=="nodes,apps,routes,tools,processes") return false;
+        if(namespaces.map(el=>el.querySelector("text").textContent).join(",")!=="nodes,apps,databases,routes,tools") return false;
         for(const namespace of namespaces) {
             const route=namespace.querySelector("[data-inventory-route]");
             if(parseFloat(getComputedStyle(route).strokeDashoffset)!==0) return false;

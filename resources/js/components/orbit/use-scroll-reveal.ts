@@ -1,3 +1,4 @@
+import { cancelScrollFrame, observeScroll, requestScrollFrame, setSceneHidden } from "./animation";
 import { useEffect, type RefObject } from "react";
 import { storyEntranceEnd } from "./story-entrance";
 
@@ -14,6 +15,7 @@ export function useScrollReveal(
     ref: RefObject<HTMLElement | null>,
     sequence: RevealSequence,
     namespace: "build" | "foundation" | "install",
+    { blur = true }: { blur?: boolean } = {},
 ) {
     useEffect(() => {
         const section = ref.current;
@@ -49,15 +51,18 @@ export function useScrollReveal(
         sequence(section, add);
         let frame = 0;
         let disposed = false;
-        const paint = () => {
+        const paint = (_time: number, scrollTop: number) => {
             frame = 0;
             for (const part of parts) {
                 const progress =
                     motion.matches || part.element.contains(document.activeElement)
                         ? 1
-                        : Math.max(0, Math.min(1, (scrollY - part.start) / part.distance));
+                        : Math.max(0, Math.min(1, (scrollTop - part.start) / part.distance));
                 if (progress === part.progress) continue;
                 part.progress = progress;
+                if (part.element.hasAttribute("data-motion-scene")) {
+                    setSceneHidden(part.element, "scroll-reveal", progress === 0);
+                }
                 if (part.art === "veil") {
                     part.element.style.setProperty("--scroll-veil-progress", String(progress));
                     part.element.setAttribute(`data-${namespace}-progress`, String(progress));
@@ -65,14 +70,14 @@ export function useScrollReveal(
                 }
                 part.element.style.opacity = String(progress);
                 part.element.style.filter =
-                    progress === 1
-                        ? "none"
-                        : `blur(calc(var(--blur-story-layer) * ${1 - progress}))`;
+                    blur && progress < 1
+                        ? `blur(calc(var(--blur-story-layer) * ${1 - progress}))`
+                        : "none";
                 part.element.setAttribute(`data-${namespace}-progress`, String(progress));
             }
         };
         const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(paint);
+            if (!frame) frame = requestScrollFrame(paint);
         };
         const measure = () => {
             if (disposed) return;
@@ -114,7 +119,7 @@ export function useScrollReveal(
         // Keyboard focus makes an entering control crisp immediately.
         section.addEventListener("focusin", schedule);
         section.addEventListener("focusout", schedule);
-        window.addEventListener("scroll", schedule, { passive: true });
+        const stopScroll = observeScroll(schedule);
         window.addEventListener("resize", measure);
         window.addEventListener("pageshow", measure);
         motion.addEventListener("change", schedule);
@@ -122,15 +127,18 @@ export function useScrollReveal(
         measure();
         return () => {
             disposed = true;
-            cancelAnimationFrame(frame);
+            cancelScrollFrame(frame);
             resize.disconnect();
             section.removeEventListener("focusin", schedule);
             section.removeEventListener("focusout", schedule);
-            window.removeEventListener("scroll", schedule);
+            stopScroll();
             window.removeEventListener("resize", measure);
             window.removeEventListener("pageshow", measure);
             motion.removeEventListener("change", schedule);
             for (const { element } of parts) {
+                if (element.hasAttribute("data-motion-scene")) {
+                    setSceneHidden(element, "scroll-reveal", false);
+                }
                 element.style.removeProperty("--scroll-veil-progress");
                 element.style.removeProperty("opacity");
                 element.style.removeProperty("filter");
@@ -139,5 +147,5 @@ export function useScrollReveal(
                 }
             }
         };
-    }, [ref, sequence, namespace]);
+    }, [ref, sequence, namespace, blur]);
 }

@@ -3,17 +3,12 @@
 it('explains the Orbit core around equal square tiles with right-angle connections', function (int $width, bool $reduced) {
     $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
     $page->assertSee('A steady core. Swap the rest.')
-        ->assertSee('Your applications')
-        ->assertSee('Your machines')
-        ->assertSee('Your tools')
-        ->assertSee('The work running')
-        ->assertSee('The state you intend')
-        ->assertSee('The rules that protect it')
+        ->assertScript('Array.from(document.querySelectorAll("[data-foundation-note]")).sort((a,b)=>Number(a.style.order)-Number(b.style.order)).map(note=>note.querySelector("h3").textContent)', ['Nodes', 'Apps', 'Instances', 'Processes', 'Databases', 'Tools', 'Security', 'Updates'])
         ->assertMissing('[data-foundation-visitor]')
         ->assertMissing('.orbit-foundation figcaption')
         ->assertMissing('.orbit-owned-machine__copy')
         ->assertMissing('[data-foundation-gateway] text')
-        ->assertAttribute('[data-foundation-core-logo]', 'href', '/assets/orbit/logo-white.svg');
+        ->assertPresent('path[data-foundation-core-logo]');
     $page->script('document.querySelector("[data-owned-infrastructure]").scrollIntoView({block:"center",behavior:"instant"})');
     $page->assertScript('async () => {
         await document.fonts.ready;
@@ -61,7 +56,11 @@ it('explains the Orbit core around equal square tiles with right-angle connectio
         }
         if (reached.size !== 9 || links.some(link => link.getTotalLength() <= 0)) return false;
         if (getComputedStyle(scene.querySelector("h3")).fontSize !== "18px" || getComputedStyle(scene.querySelector("p")).fontSize !== "14px") return false;
-        if (!["projects", "apps", "instances", "nodes", "processes", "tools", "updates", "firewall"].every(label => plates.some(plate => plate.dataset.foundationPlate === label))) return false;
+        const labels = ["nodes", "apps", "instances", "processes", "databases", "tools", "security", "updates"];
+        if (!labels.every(label => plates.some(plate => plate.dataset.foundationPlate === label))) return false;
+        const callouts = [...scene.querySelectorAll("[data-foundation-link]")];
+        if (callouts.length !== 8 || scene.querySelectorAll("[data-foundation-note]").length !== 8
+            || !labels.every(label => callouts.filter(line => line.dataset.foundationResource === label).length === 1)) return false;
         if (Math.abs((gateway.left + gateway.right - base.left - base.right) / 2) > 1) return false;
         if (![...svg.querySelectorAll("[data-foundation-face]")].every(face => Number(face.getAttribute("rx")) > 0)) return false;
         if (!plates.every(plate => {
@@ -69,8 +68,8 @@ it('explains the Orbit core around equal square tiles with right-angle connectio
             const label = text.getBBox();
             return label.x >= -88 && label.x + label.width <= 88;
         })) return false;
-        if ([...scene.querySelectorAll(".orbit-foundation__notes--left h3")].map(el => el.textContent).join(",") !== "Your machines,Your tools,The state you intend"
-            || [...scene.querySelectorAll(".orbit-foundation__notes--right h3")].map(el => el.textContent).join(",") !== "Your applications,The work running,The rules that protect it") return false;
+        if ([...scene.querySelectorAll(".orbit-foundation__notes--left h3")].map(el => el.textContent).join(",") !== "Nodes,Instances,Databases,Security"
+            || [...scene.querySelectorAll(".orbit-foundation__notes--right h3")].map(el => el.textContent).join(",") !== "Apps,Processes,Tools,Updates") return false;
         if (![...scene.querySelectorAll("[data-foundation-note]")].every((note, index) => {
             const icon = note.querySelector(".orbit-foundation__note-icon");
             const title = note.querySelector("h3").getBoundingClientRect();
@@ -81,17 +80,17 @@ it('explains the Orbit core around equal square tiles with right-angle connectio
             const divider = innerWidth <= 480
                 ? bar.display === "none" && style.borderTopWidth === (index === 0 ? "0px" : "1px")
                     && style.paddingLeft === "0px" && style.paddingRight === "0px"
-                : bar.width === "8px" && bar.boxSizing === "border-box"
+                : bar.width === "6px" && bar.boxSizing === "border-box"
                     && [bar.borderTopWidth, bar.borderRightWidth, bar.borderBottomWidth, bar.borderLeftWidth].every(width => width === "1px")
                     && bar.backgroundImage.includes("repeating-linear-gradient(135deg")
                     && bar.backgroundClip === "padding-box"
-                    && (innerWidth <= 600 || index < 3 ? bar.right : bar.left) === "0px";
+                    && bar.left === "0px";
             return divider
                 && box.width === 26 && box.height === 26 && box.bottom < title.top
                 && icon.getAttribute("aria-hidden") === "true";
         })) return false;
         if (getComputedStyle(svg.querySelector("[data-foundation-gateway] [data-foundation-face]")).fill !== "rgb(255, 255, 255)"
-            || getComputedStyle(svg.querySelector("[data-foundation-core-logo]")).filter !== "brightness(0)") return false;
+            || getComputedStyle(svg.querySelector("[data-foundation-core-logo]")).fill !== "rgb(0, 0, 0)") return false;
         if (matchMedia("(prefers-reduced-motion: reduce)").matches && scene.querySelector("[data-highlighted]")) return false;
         if (innerWidth > 1200) {
             if (left.right >= art.left || right.left <= art.right) return false;
@@ -131,23 +130,27 @@ it('explains the Orbit core around equal square tiles with right-angle connectio
                 const approach = before.matrixTransform(baseInverse);
                 const rear = line.dataset.foundationEntry === "rear";
                 const correctEntry = rear
-                    ? index < 3
+                    ? index < 4
                         ? Math.abs(landing.x) < .1 && Math.abs(approach.y - landing.y) < .1 && approach.x < landing.x
                         : Math.abs(landing.y) < .1 && Math.abs(approach.x - landing.x) < .1 && approach.y < landing.y
-                    : index < 3
+                    : index < 4
                         ? Math.abs(landing.y - 604) < .1 && Math.abs(approach.x - landing.x) < .1 && approach.y > landing.y
                         : Math.abs(landing.x - 604) < .1 && Math.abs(approach.y - landing.y) < .1 && approach.x > landing.x;
-                const midpointLandings = [[0, 300], [112, 604], [496, 604], [300, 0], [604, 112], [604, 496]];
+                const midpointLandings = [[0, 108], [0, 300], [112, 604], [304, 604], [300, 0], [492, 0], [604, 304], [604, 496]];
                 const [midpointX, midpointY] = midpointLandings[index];
                 return correctEntry
                     && Math.abs(landing.x - midpointX) < .1
                     && Math.abs(landing.y - midpointY) < .1
                     && Math.abs(start.y - note.top - note.height / 2) < 1
-                    && Math.abs(start.x - (index < 3 ? note.right : note.left)) < 1
+                    && Math.abs(start.x - (index < 4 ? note.right : note.left)) < 1
                     && Math.abs(end.x - port.left - port.width / 2) < 1
                     && Math.abs(end.y - port.top - port.height / 2) < 1;
             })) return false;
-        } else if (left.top < art.bottom || right.top < art.bottom) return false;
+        } else {
+            const ordered = [...scene.querySelectorAll("[data-foundation-note]")].sort((a,b)=>Number(a.style.order)-Number(b.style.order));
+            if (ordered.some(note => note.getBoundingClientRect().top < art.bottom)) return false;
+            if (innerWidth <= 480 && ordered.some((note,index) => index > 0 && note.getBoundingClientRect().top < ordered[index-1].getBoundingClientRect().bottom)) return false;
+        }
         return document.documentElement.scrollWidth <= innerWidth
             && [...scene.querySelectorAll("[data-foundation-note]")].every(note => {
                 const box = note.getBoundingClientRect();

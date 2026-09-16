@@ -21,7 +21,7 @@ const capabilities = [
     {
         id: "store",
         title: "One place to know what exists.",
-        body: "Machines, apps, routes, tools and processes live in one central store on your Gateway. You and your agent work from the same record.",
+        body: "Machines, apps, databases, routes and tools live in one central store on your Gateway. You and your agent work from the same record.",
     },
     {
         id: "doctor",
@@ -68,8 +68,8 @@ export function Capabilities() {
             aria-labelledby="capabilities-title"
         >
             <div ref={ref} className="orbit-capabilities__inner">
-                <div className="orbit-label mb-5">The pieces, connected</div>
-                <h2 id="capabilities-title">What it takes to trust an agent with your fleet.</h2>
+                <div className="orbit-label mb-5">The building blocks</div>
+                <h2 id="capabilities-title">The foundation for the nodes and apps you run.</h2>
                 <div className="orbit-capabilities__grid">
                     {capabilities.map((feature) => (
                         <article

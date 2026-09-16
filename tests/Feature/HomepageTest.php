@@ -22,7 +22,7 @@ it('renders the story homepage selected from the Orbit design system', function 
 
     expect($source)
         ->toBeString()
-        ->toContain('Build your ideas on machines you own, run by your agent.')
+        ->toContain('Build ideas faster on machines you own, run by your agent.')
         ->toContain('Local development stops when your laptop does.')
         ->toContain('Move the work. Keep the control.')
         ->toContain('Start with one machine. Make room for what’s next.')

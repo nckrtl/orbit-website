@@ -29,7 +29,7 @@ export function MobileMenu() {
                 <div className="orbit-mobile-menu__heading">
                     <SheetTitle className="orbit-label">Explore Orbit</SheetTitle>
                     <span className="orbit-label" aria-hidden="true">
-                        01 — 03
+                        01 to 03
                     </span>
                 </div>
                 <nav aria-label="Mobile navigation">
