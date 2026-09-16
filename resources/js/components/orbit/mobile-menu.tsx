@@ -6,6 +6,7 @@ const destinations = [
     { href: "#story", label: "The story", detail: "From laptop to fleet" },
     { href: "#build", label: "Build with Orbit", detail: "Your environment, connected" },
     { href: "#install", label: "Get started", detail: "Let your agent set it up" },
+    { href: "/docs", label: "Docs", detail: "Guides and reference" },
 ];
 
 export function MobileMenu() {
@@ -29,7 +30,7 @@ export function MobileMenu() {
                 <div className="orbit-mobile-menu__heading">
                     <SheetTitle className="orbit-label">Explore Orbit</SheetTitle>
                     <span className="orbit-label" aria-hidden="true">
-                        01 to 03
+                        01 to 04
                     </span>
                 </div>
                 <nav aria-label="Mobile navigation">

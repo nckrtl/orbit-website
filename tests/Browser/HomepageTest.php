@@ -321,6 +321,7 @@ it('links navigation and calls to action to page sections and GitHub', function 
     $page->assertAttribute('nav[aria-label="Primary navigation"] a[href="#story"]', 'href', '#story')
         ->assertAttribute('nav[aria-label="Primary navigation"] a[href="#build"]', 'href', '#build')
         ->assertAttribute('nav[aria-label="Primary navigation"] a[href="#install"]', 'href', '#install')
+        ->assertAttribute('nav[aria-label="Primary navigation"] a[href="/docs"]', 'href', '/docs')
         ->assertAttribute('a[href="https://github.com/nckrtl/orbit"]', 'href', 'https://github.com/nckrtl/orbit')
         ->assertNoJavaScriptErrors();
 });

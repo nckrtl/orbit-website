@@ -139,6 +139,7 @@ function Header({ washRef }: { washRef: RefObject<HTMLDivElement | null> }) {
                     <a href="#story">Story</a>
                     <a href="#build">Build</a>
                     <a href="#install">Setup</a>
+                    <a href="/docs">Docs</a>
                 </nav>
                 <ButtonLink href="#install" size="sm" className="ml-auto">
                     Get started
