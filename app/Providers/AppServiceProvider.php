@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,6 +32,13 @@ class AppServiceProvider extends ServiceProvider
         }
 
         if ($this->app->isProduction()) {
+            $appUrl = config('app.url');
+
+            if (is_string($appUrl) && $appUrl !== '') {
+                URL::forceRootUrl($appUrl);
+                URL::forceScheme('https');
+            }
+
             Vite::prefetch();
         }
     }
