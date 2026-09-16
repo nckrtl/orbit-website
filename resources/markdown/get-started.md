@@ -2,76 +2,33 @@
 
 > Orbit turns machines you own into an always-on development network. Your agent directs the work through a CLI; a Gateway coordinates your machines, applications, processes, and private routes.
 
-If a user shares this page and says “I want to get started with this,” help them
-get their first project running with Orbit. Begin with their existing setup and
-choose the smallest useful configuration. They do not need to learn every Orbit
-concept before you can help.
+If a user shares this page and says "I want to get started with this," help them get their first project running with Orbit. The steps live in the Orbit documentation. This page tells you where to start and what to settle with the user first.
+
+## Read the documentation
+
+The documentation is written for you and the user together. Every page is available as Markdown at its URL with `.md` appended.
+
+- [Quickstart](https://orbit.nckrtl.com/docs/quickstart.md): installs a Gateway, adds a development Node, and opens a first App. It names the machine and account for every command, marks the moments that need the user, and ends each step with a checkpoint.
+- [Documentation index](https://orbit.nckrtl.com/docs/llms.txt): every page with a one-line description. Fetch it before you look for anything else.
+- [Concepts](https://orbit.nckrtl.com/docs/concepts.md) and [Architecture](https://orbit.nckrtl.com/docs/architecture.md): the terms Orbit uses and the path a command takes.
+- [Orbit repository](https://github.com/nckrtl/orbit): the source.
+
+Follow the current documentation over anything you remember about Orbit. If it does not cover the user's setup, say which prerequisite is missing instead of inventing a command.
 
 ## Start with their machine and their goal
 
-Find out which machine will run the work, its operating system, whether they
-already have an Orbit Gateway, and which project they want to run. Inspect the
-environment when you have terminal access; ask for the missing details when you
-do not. Do not assume the machine running the agent is the machine to provision.
+Find out which machines will do the work, whether the user already runs an Orbit Gateway, and which project they want to run. Inspect the environment when you have terminal access; ask when you do not. Do not assume the machine that runs you is the machine to provision.
 
-Useful initial checks are `command -v orbit`, `php --version`, and
-`composer --version`. If Orbit is present, read `orbit --help` and the help for
-the relevant commands before using them. Reuse an existing working installation.
-
-## Read the current installation instructions
-
-Orbit is developed in one repository with separate CLI, Gateway, and SDK
-projects. PHP 8.5 and Composer are required by the current source projects;
-managed Nodes run Ubuntu. Installing a CLI alone does not provision a Gateway
-or a Node.
-
-Use these first-party sources to choose the installation path appropriate to
-the user's environment and the current release:
-
-- [Repository and bootstrap instructions](https://github.com/nckrtl/orbit)
-- [Repository README as Markdown](https://raw.githubusercontent.com/nckrtl/orbit/main/README.md)
-- [CLI setup and first use](https://raw.githubusercontent.com/nckrtl/orbit/main/apps/cli/README.md)
-- [Gateway setup](https://raw.githubusercontent.com/nckrtl/orbit/main/apps/gateway/README.md)
-- [Architecture](https://raw.githubusercontent.com/nckrtl/orbit/main/docs/architecture.md)
-- [Supported technology](https://raw.githubusercontent.com/nckrtl/orbit/main/docs/tech-stack.md)
-
-Verify the current release and package availability before proposing an install
-command. Do not assume `composer global require nckrtl/orbit` is available: the
-repository now has separate project and release boundaries. Repository bootstrap
-instructions set up source dependencies; they are not proof that a user's fleet
-has been provisioned. If the current documentation does not cover their setup,
-explain the missing prerequisite instead of inventing a command.
+Check for an existing installation with `command -v orbit` and `orbit gateway:status`. Reuse a working installation; do not bootstrap over it. Read `orbit --help` and the help of each command before you use it.
 
 ## Bring up one useful environment
 
-1. Install or locate the CLI using the documented path for the user's setup.
-2. Connect to their existing Gateway, or follow the Gateway's current setup
-   instructions. Confirm the connection before changing managed machines.
-3. Register or select the intended development Node. Check the installed CLI's
-   command help and the current Node documentation for its requirements.
-4. Bring the user's first project into an AppInstance, configure its required
-   runtime and processes, and read back the Route Orbit assigns.
-5. Open that URL and verify that the application actually responds. Confirm its
-   background processes run on the intended machine.
+A user without a Gateway starts at the top of the Quickstart: two fresh Ubuntu 26.04 machines, one Gateway, one development Node, one App on a private HTTPS address. A user with a Gateway and a connected CLI skips to the Quickstart's Node and App steps, or brings their own repository through the [Applications guide](https://orbit.nckrtl.com/docs/domains/applications.md).
 
-Follow the user's existing authorization. Before changing machine-wide networking,
-trust stores, or services, make the target and effect clear. Preserve existing
-projects and data. Keep credentials out of chat, logs, and repository files.
-
-Useful references:
-
-- [Application and source placement](https://raw.githubusercontent.com/nckrtl/orbit/main/docs/domains/applications.md)
-- [Routes and private access](https://raw.githubusercontent.com/nckrtl/orbit/main/docs/reference/routes.md)
-- [Tools and dependencies](https://raw.githubusercontent.com/nckrtl/orbit/main/docs/reference/tools.md)
-- [Documentation index](https://github.com/nckrtl/orbit/tree/main/docs)
+Follow the user's existing authorization. Before you change machine-wide networking, trust stores, or services, name the machine and the effect. Preserve existing projects and data. Keep credentials out of the chat, logs, and repository files.
 
 ## Verify and hand back control
 
-Use `orbit doctor` to inspect health. Doctor reports problems; it does not repair
-them automatically. Check command help and propose the relevant fix if it finds
-an issue. A successful provisioning command alone is not an application health
-check.
+Use `orbit doctor` to inspect health. Doctor reports problems; it does not repair them. A successful provisioning command alone is not an application health check: open the URL and verify that the application answers.
 
-Finish with the working project URL, the machine running it, the processes that
-will keep running, and any remaining setup needed on the user's other devices.
-The goal is a working first environment they understand and control.
+Finish with the working project URL, the machine that runs it, the record IDs, the source commit, and any setup left on the user's other devices. The goal is a working first environment they understand and control.

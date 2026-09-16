@@ -4,14 +4,16 @@
 
 ## Get started
 
-- [Get started with Orbit](/get-started.md): Start here when a user shares this site. Identify their machine and project, follow the current installation documentation, and verify their first environment.
+- [Get started with Orbit](/get-started.md): Start here when a user shares this site. It tells you what to settle with the user, then sends you to the Quickstart.
+- [Quickstart](https://orbit.nckrtl.com/docs/quickstart.md): Install a Gateway, add a development Node, and open a first App. Written for an agent and its user together.
 
-The homepage also returns this guide when requested with `Accept: text/markdown`.
+The homepage also returns the guide when requested with `Accept: text/markdown`.
 The direct Markdown URL works regardless of the client's user-agent identifier.
 
-## Source and documentation
+## Documentation
 
-- [Orbit repository](https://github.com/nckrtl/orbit): Source and current bootstrap instructions.
-- [CLI guide](https://github.com/nckrtl/orbit/blob/main/apps/cli/README.md): CLI setup and first use.
-- [Architecture](https://github.com/nckrtl/orbit/blob/main/docs/architecture.md): CLI, Gateway, Nodes, and application traffic.
-- [Documentation](https://github.com/nckrtl/orbit/tree/main/docs): Product concepts and reference material.
+- [Documentation index](https://orbit.nckrtl.com/docs/llms.txt): Every page with a one-line description. Append `.md` to any page URL for Markdown.
+- [Concepts](https://orbit.nckrtl.com/docs/concepts.md): Gateway, Node, Cluster, App, App instance, Route, and the other terms Orbit uses.
+- [Architecture](https://orbit.nckrtl.com/docs/architecture.md): CLI, Gateway, Nodes, and application traffic.
+- [CLI reference](https://orbit.nckrtl.com/docs/cli/overview.md): Every command family.
+- [Orbit repository](https://github.com/nckrtl/orbit): Source.
