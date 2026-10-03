@@ -6,7 +6,6 @@ namespace App\Http\Controllers;
 
 use App\Support\OrbitGuide;
 use Illuminate\Http\Response;
-use NckRtl\Waymaker\Get;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -17,43 +16,36 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class AgentDocsController extends Controller
 {
-    #[Get(uri: '/get-started.md')]
     public function gettingStarted(OrbitGuide $guide): Response
     {
         return $guide->response();
     }
 
-    #[Get(uri: '/llms.txt')]
     public function index(): Response
     {
         return $this->markdown('llms.txt', 'text/plain');
     }
 
-    #[Get(uri: '/create.md')]
     public function create(): Response
     {
         return $this->markdown('create.md', 'text/markdown');
     }
 
-    #[Get(uri: '/conventions.md')]
     public function conventions(): Response
     {
         return $this->markdown('conventions.md', 'text/markdown');
     }
 
-    #[Get(uri: '/herd.md')]
     public function herd(): Response
     {
         return $this->markdown('environments/herd.md', 'text/markdown');
     }
 
-    #[Get(uri: '/orbit.md')]
     public function orbit(): Response
     {
         return $this->markdown('environments/orbit.md', 'text/markdown');
     }
 
-    #[Get(uri: '/solo.md')]
     public function solo(): Response
     {
         return $this->markdown('environments/solo.md', 'text/markdown');
