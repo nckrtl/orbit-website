@@ -6,7 +6,6 @@ const launchConfig = await defineLaunchConfig({
     // override, so it has to be pinned here. 13714-13718 are taken on the main1
     // production node (13717 is toolbar), hence 13719.
     inertia: { ssr: { port: 13719 } },
-    agentation: false,
 });
 
 function resolveDevServerOrigin(): string | undefined {
