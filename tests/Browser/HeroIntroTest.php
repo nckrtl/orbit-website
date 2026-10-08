@@ -48,7 +48,7 @@ it('brings the navigation into focus promptly without moving', function (int $wi
             && samples[2].filter === "blur(0px)" && getComputedStyle(header).filter === "blur(0px)"
             && samples.every(sample => Math.abs(sample.opacity - sample.progress) < 0.01
                 && Math.abs(sample.top - (start + (end - start) * sample.progress)) < 0.1)
-            && header.querySelectorAll("a").length === 5
+            && header.querySelectorAll("a").length === 6
             && header.getAnimations({subtree: true}).length === 1;
     }', true);
     if ($width <= 1100) {
@@ -341,7 +341,7 @@ it('fades the navigation backdrop in on scroll and clears it at the top', functi
             && style.opacity==="1" && style.filter===(matchMedia("(prefers-reduced-motion: reduce)").matches ? "none" : "blur(0px)")
             && style.backdropFilter.includes("blur(14px)")
             && getComputedStyle(wash).opacity==="1"
-            && header.querySelectorAll("a").length===5;
+            && header.querySelectorAll("a").length===6;
     }', true);
     $page->script('window.scrollTo({top:0,behavior:"instant"})');
     $page->assertScript('getComputedStyle(document.querySelector(".orbit-story-header__wash")).opacity', '0')
