@@ -156,7 +156,12 @@ it('keeps the light homepage readable and usable with reduced motion', function 
 })->with(['desktop' => 1440, 'phone' => 390]);
 
 it('paints the core logo inline with strong contrast in both mobile themes', function (string $theme) {
-    $page = visit('/', ['reducedMotion' => 'reduce'])->resize(390, 844);
+    // Start mobile before hydration. A desktop-to-mobile resize can invalidate
+    // scrollIntoView as responsive effects settle, leaving the logo offscreen.
+    $page = visit('/', [
+        'reducedMotion' => 'reduce',
+        'viewport' => ['width' => 390, 'height' => 844],
+    ]);
     $page->assertScript('document.querySelector("[data-hero-content]").hasAttribute("data-exit-start")', true);
     if ($theme === 'light') {
         $page->click('[aria-label="Choose color theme"]');

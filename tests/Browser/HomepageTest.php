@@ -699,7 +699,13 @@ it('joins bento panels edge to edge with single shared dividers', function (int 
 })->with(['wide' => 2122, 'desktop' => 1440, 'tablet' => 768, 'mobile' => 390]);
 
 it('connects the central server to the third section without crossing either text block', function (int $width) {
-    $page = visit('/', ['reducedMotion' => 'reduce'])->resize($width, 1000);
+    // This checks geometry at a viewport, not a live breakpoint transition.
+    // Set it before hydration so the route and responsive SVG camera measure
+    // the same layout rather than racing a post-navigation resize.
+    $page = visit('/', [
+        'reducedMotion' => 'reduce',
+        'viewport' => ['width' => $width, 'height' => 1000],
+    ]);
     $page->assertAttribute('[data-growth-route]', 'data-progress', '1.000')
         ->assertScript('() => {
             const path = document.querySelector("[data-growth-route] [data-route-path]");
@@ -1681,7 +1687,13 @@ it('alternates agent icons on one stationary platform and respects reduced motio
 })->with(['motion' => false, 'reduced motion' => true]);
 
 it('streams caused actions beneath a fixed log header and clips old rows', function (int $width, bool $reduced) {
-    $page = visit('/', ['reducedMotion' => $reduced ? 'reduce' : 'no-preference'])->resize($width, 1000);
+    // Scroll and sample the header in the intended layout from navigation.
+    // Resizing during hydration can move the entire page beneath the sample;
+    // that is unrelated to whether incoming log rows move the header.
+    $page = visit('/', [
+        'reducedMotion' => $reduced ? 'reduce' : 'no-preference',
+        'viewport' => ['width' => $width, 'height' => 1000],
+    ]);
     $page->script('document.querySelector("[data-capability=activity]").scrollIntoView({block:"center",behavior:"instant"})');
     $page->assertScript('() => {
         const panel=document.querySelector("[data-action-log]");
