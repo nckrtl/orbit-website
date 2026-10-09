@@ -19,18 +19,24 @@ export function InventoryDrawing() {
     const radius = useMatchedPlanetRadius(ref);
     const [tabWidth, setTabWidth] = useState(80);
     useEffect(() => {
+        const drawing = ref.current;
+        if (!drawing) return;
+        const labels = [...drawing.querySelectorAll<SVGTextElement>("[data-inventory-tile] text")];
         let disposed = false;
-        void document.fonts.ready.then(() => {
-            if (disposed || !ref.current) return;
-            const labels = [
-                ...ref.current.querySelectorAll<SVGTextElement>("[data-inventory-tile] text"),
-            ];
+        const measure = () => {
+            if (disposed) return;
             setTabWidth(
                 Math.ceil(Math.max(...labels.map((label) => label.getComputedTextLength())) + 20),
             );
-        });
+        };
+        // Label length changes when the font loads and when the drawing is scaled.
+        const observer = new ResizeObserver(measure);
+        observer.observe(drawing);
+        labels.forEach((label) => observer.observe(label));
+        void document.fonts.ready.then(measure);
         return () => {
             disposed = true;
+            observer.disconnect();
         };
     }, []);
     const axisLength = Math.hypot(...axis);
