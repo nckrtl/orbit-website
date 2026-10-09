@@ -45,7 +45,7 @@ it('joins rounded tab faces with opaque thin sides and clean corners', function 
     $page->assertScript('() => {
         const tiles=[...document.querySelectorAll("[data-inventory-tile]")];
         const widths=tiles.map(tile=>tile.querySelector("rect").width.baseVal.value);
-        const longest=tiles.find(tile=>tile.textContent.trim()==="processes").querySelector("text");
+        const longest=tiles.find(tile=>tile.textContent.trim()==="databases").querySelector("text");
         const padding=widths[0]-longest.getComputedTextLength();
         return widths.every(width=>width===widths[0]) && widths[0]<100
             && longest.x.baseVal[0].value===10 && padding>=20 && padding<21;
